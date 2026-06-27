@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clara词研堂：以AI伴读，达词句贯通</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f3ef;
+  --card:#ffffff;
+  --border:#dddcd6;
+  --border-strong:#bbb;
+  --text:#1a1a18;
+  --text-2:#555;
+  --text-3:#999;
+  --accent:#1a56db;
+  --accent-bg:#e8f0fe;
+  --accent-border:#93b4f7;
+  --green:#0f9465;
+  --green-bg:#e6f7f1;
+  --amber:#b45309;
+  --amber-bg:#fef3c7;
+  --red:#b91c1c;
+  --red-bg:#fee2e2;
+  --radius:8px;
+  --radius-lg:14px;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── TOP NAV ── */
+.top-nav{background:#fff;border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:100;height:52px}
+.brand{font-size:15px;font-weight:700;color:var(--text);margin-right:20px;white-space:nowrap;max-width:360px;overflow:hidden;text-overflow:ellipsis}
+.brand span{color:var(--accent)}
+.nav-tabs{display:flex;gap:2px;flex:1;overflow-x:auto}
+.nav-tab{padding:6px 14px;font-size:13px;border-radius:var(--radius);border:none;background:transparent;color:var(--text-2);cursor:pointer;white-space:nowrap;transition:all .12s;font-weight:500}
+.nav-tab:hover{background:var(--bg);color:var(--text)}
+.nav-tab.active{background:var(--accent-bg);color:var(--accent)}
+.lesson-badge{background:var(--amber-bg);color:var(--amber);font-size:12px;padding:3px 10px;border-radius:20px;font-weight:600;margin-left:auto;white-space:nowrap}
+
+/* ── PANELS ── */
+.panel{display:none;padding:20px 20px 60px;max-width:740px;margin:0 auto}
+.panel.active{display:block}
+
+/* ── SECTION TITLE ── */
+.sec-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.sec-sub{font-size:13px;color:var(--text-3);margin-bottom:20px}
+
+/* ── LESSON MANAGER ── */
+.lesson-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.lesson-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:border-color .12s}
+.lesson-item:hover{border-color:var(--accent)}
+.lesson-item.active-lesson{border-color:var(--accent);background:var(--accent-bg)}
+.lesson-name{font-size:14px;font-weight:600;flex:1}
+.lesson-count{font-size:12px;color:var(--text-3)}
+.lesson-actions{display:flex;gap:6px}
+.icon-btn{background:transparent;border:none;cursor:pointer;color:var(--text-3);font-size:16px;padding:2px 4px;border-radius:4px;transition:color .12s}
+.icon-btn:hover{color:var(--red)}
+.add-lesson-row{display:flex;gap:8px}
+.add-lesson-row input{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;background:#fff;outline:none}
+.add-lesson-row input:focus{border-color:var(--accent)}
+.btn{padding:9px 18px;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .12s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#1448b8}
+.btn-outline{background:#fff;color:var(--text);border:1px solid var(--border-strong)}
+.btn-outline:hover{background:var(--bg)}
+.btn-green{background:var(--green);color:#fff}
+.btn-green:hover{background:#0a7a53}
+.btn-sm{padding:6px 12px;font-size:13px}
+
+/* ── WORD EDITOR ── */
+.editor-header{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.editor-header h3{font-size:15px;font-weight:700;flex:1}
+.word-rows{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.word-row{display:grid;grid-template-columns:1fr 1fr 1.4fr auto;gap:6px;align-items:start}
+.word-row input{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:#fff;outline:none;width:100%}
+.word-row input:focus{border-color:var(--accent)}
+.word-row input.sentence{grid-column:1/-2}
+.del-row{background:transparent;border:none;color:var(--text-3);cursor:pointer;font-size:18px;padding:8px 6px;line-height:1;transition:color .12s}
+.del-row:hover{color:var(--red)}
+.row-labels{display:grid;grid-template-columns:1fr 1fr 1.4fr auto;gap:6px;margin-bottom:4px}
+.row-label{font-size:11px;color:var(--text-3);font-weight:600;letter-spacing:.04em;padding:0 2px}
+.add-word-row{display:flex;gap:8px;margin-bottom:6px}
+.import-box{background:var(--bg);border:1px dashed var(--border-strong);border-radius:var(--radius);padding:14px;margin-bottom:16px}
+.import-box p{font-size:13px;color:var(--text-2);margin-bottom:8px}
+.import-box textarea{width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:monospace;height:90px;resize:vertical;outline:none;background:#fff}
+.import-box textarea:focus{border-color:var(--accent)}
+.import-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.import-status{font-size:12px;color:var(--text-3);line-height:1.6;margin-top:8px}
+.image-import-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.file-input{font-size:12px;color:var(--text-2);max-width:100%}
+.hint-text{font-size:12px;color:var(--text-3);line-height:1.6;margin-top:4px}
+
+/* ── BROWSE ── */
+.browse-hint{font-size:13px;color:var(--text-3);text-align:center;margin-bottom:14px}
+.word-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px}
+.word-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:13px 14px 12px 12px;cursor:pointer;transition:border-color .12s,background .12s,transform .1s;position:relative;user-select:none;-webkit-tap-highlight-color:transparent}
+.word-card:active{transform:scale(.96)}
+.word-card:hover{border-color:#aaa}
+.word-card.playing{border-color:var(--accent);background:var(--accent-bg)}
+.wc-speaker{position:absolute;top:10px;right:10px;font-size:17px;color:#ccc}
+.word-card.playing .wc-speaker{color:var(--accent);animation:blink .65s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.wc-en{font-size:15px;font-weight:700;color:var(--text);padding-right:24px;line-height:1.3;margin-bottom:4px}
+.wc-zh{font-size:12px;color:var(--text-3)}
+
+/* ── READ MODE ── */
+.read-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:12px 0}
+.read-card{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:32px 40px;text-align:center;width:100%;max-width:420px}
+.read-en{font-size:38px;font-weight:800;color:var(--text);margin-bottom:10px;line-height:1.15}
+.read-zh{font-size:19px;color:var(--text-2)}
+.read-sentence{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);font-size:14px;color:var(--text-2);line-height:1.65;display:none}
+.read-sentence.has-data{display:block}
+.read-sentence .s-en{font-style:italic;color:var(--text-2);margin-bottom:3px}
+.read-sentence .s-zh{font-size:12px;color:var(--text-3)}
+.speak-btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:13px 28px;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .12s,transform .1s}
+.speak-btn:active{transform:scale(.96)}
+.speak-btn.speaking{background:var(--green)}
+.nav-row{display:flex;align-items:center;gap:14px}
+.nav-btn{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:9px 20px;font-size:14px;cursor:pointer;color:var(--text);font-weight:600;transition:all .12s}
+.nav-btn:hover{background:var(--bg)}
+.nav-btn:active{transform:scale(.96)}
+.prog-label{font-size:14px;color:var(--text-3);min-width:60px;text-align:center}
+.auto-row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-2);flex-wrap:wrap;justify-content:center}
+.auto-row select{font-size:13px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text)}
+.auto-row label{cursor:pointer;display:flex;align-items:center;gap:6px}
+.auto-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
+
+/* ── PRACTICE MODES ── */
+.practice-card{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:28px 30px;text-align:center;width:100%;max-width:460px}
+.practice-kicker{font-size:12px;color:var(--text-3);font-weight:700;letter-spacing:.04em;margin-bottom:10px}
+.practice-prompt{font-size:18px;color:var(--text-2);line-height:1.5;margin-bottom:16px}
+.practice-main{font-size:34px;font-weight:800;color:var(--text);line-height:1.2;margin-bottom:10px;word-break:break-word}
+.practice-answer{border-top:1px solid var(--border);margin-top:18px;padding-top:16px;font-size:22px;font-weight:700;color:var(--green);display:none}
+.practice-answer.show{display:block}
+.practice-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.dict-input{width:100%;max-width:380px;border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;font-size:22px;font-weight:700;text-align:center;outline:none;background:#fff;color:var(--text)}
+.dict-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.dict-input.correct{border-color:var(--green);background:var(--green-bg)}
+.dict-input.wrong{border-color:var(--red);background:var(--red-bg)}
+.feedback{min-height:24px;font-size:14px;font-weight:700;text-align:center}
+.feedback.ok{color:var(--green)}
+.feedback.bad{color:var(--red)}
+.hint-chip{font-size:13px;color:var(--text-2);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:5px 12px}
+
+/* ── SENTENCE MODE ── */
+.generator-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow)}
+.generator-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.generator-head h3{font-size:15px;flex:1}
+.generator-tools{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:8px;align-items:center}
+.generator-tools input,.generator-tools select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:#fff;outline:none}
+.generator-tools input:focus,.generator-tools select:focus{border-color:var(--accent)}
+.generator-buttons{display:flex;gap:8px;justify-content:flex-end;white-space:nowrap}
+.generator-settings{margin-top:10px;border-top:1px solid var(--border);padding-top:9px}
+.generator-settings summary{font-size:12px;color:var(--text-3);cursor:pointer;user-select:none;width:max-content}
+.generator-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.generator-grid input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;background:#fff;outline:none}
+.generator-grid input:focus{border-color:var(--accent)}
+.generator-status{font-size:12px;color:var(--text-3);line-height:1.6}
+.sentence-list{display:flex;flex-direction:column;gap:10px}
+.sent-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;transition:border-color .12s,background .12s}
+.sent-card:hover{border-color:#aaa}
+.sent-card.playing{border-color:var(--green);background:var(--green-bg)}
+.sent-top{display:flex;align-items:flex-start;gap:12px}
+.sent-speaker{font-size:20px;color:#ccc;flex-shrink:0;margin-top:2px}
+.sent-card.playing .sent-speaker{color:var(--green);animation:blink .65s ease-in-out infinite}
+.sent-tag{display:inline-block;font-size:11px;font-weight:700;background:var(--accent-bg);color:var(--accent);padding:2px 8px;border-radius:20px;margin-bottom:5px;letter-spacing:.02em}
+.sent-en{font-size:16px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:4px}
+.sent-zh{font-size:13px;color:var(--text-3)}
+.empty-state{text-align:center;padding:48px 20px;color:var(--text-3)}
+.empty-state .emoji{font-size:36px;margin-bottom:12px}
+.empty-state p{font-size:14px;line-height:1.7}
+
+/* ── SENTENCE READ MODE ── */
+.sread-card{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:28px 32px;text-align:center;width:100%;max-width:440px}
+.sread-tag{font-size:11px;font-weight:700;background:var(--accent-bg);color:var(--accent);padding:2px 10px;border-radius:20px;display:inline-block;margin-bottom:12px}
+.sread-en{font-size:22px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:10px}
+.sread-zh{font-size:15px;color:var(--text-2)}
+
+/* ── SMART REVIEW / GAME / REPORT ── */
+.mini-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.metric-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow)}
+.metric-num{font-size:28px;font-weight:800;color:var(--accent);line-height:1.1}
+.metric-label{font-size:12px;color:var(--text-3);margin-top:4px}
+.weak-list,.story-box,.game-board{display:flex;flex-direction:column;gap:10px}
+.weak-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:13px 15px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.weak-en{font-size:17px;font-weight:800;color:var(--text);margin-bottom:3px}
+.weak-meta{font-size:12px;color:var(--text-3);line-height:1.5}
+.weak-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.story-card{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:20px 22px;line-height:1.75;box-shadow:var(--shadow)}
+.story-en{font-size:17px;font-weight:650;color:var(--text);margin-bottom:12px}
+.story-zh{font-size:14px;color:var(--text-2)}
+.game-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.game-pill{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:13px;color:var(--text-2);font-weight:700}
+.match-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.match-col{display:flex;flex-direction:column;gap:8px}
+.match-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:11px 12px;font-size:15px;font-weight:700;text-align:center;cursor:pointer;transition:all .12s;min-height:44px}
+.match-card:hover{border-color:var(--accent)}
+.match-card.selected{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.match-card.done{background:var(--green-bg);border-color:var(--green);color:var(--green);cursor:default}
+.match-card.bad{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+
+/* ── MISC ── */
+.divider{height:1px;background:var(--border);margin:20px 0}
+.no-words{text-align:center;padding:36px;color:var(--text-3);font-size:14px}
+.tab-inner{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+.tab-inner button{padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid var(--border);background:#fff;color:var(--text-2);cursor:pointer;font-weight:500;transition:all .12s}
+.tab-inner button.active{background:var(--green);color:#fff;border-color:var(--green)}
+.save-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;padding:10px 20px;border-radius:30px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:999}
+.save-toast.show{opacity:1}
+@media(max-width:520px){
+  .word-row{grid-template-columns:1fr 1fr;gap:5px}
+  .word-row input:nth-child(3){grid-column:1/-2}
+  .row-labels{grid-template-columns:1fr 1fr}
+  .row-labels .row-label:nth-child(3){grid-column:1/-2}
+  .read-en{font-size:28px}
+  .read-card{padding:24px 20px}
+  .top-nav{padding:0 12px}
+  .brand{max-width:180px;font-size:13px;margin-right:10px}
+  .generator-tools{grid-template-columns:1fr}
+  .generator-buttons{justify-content:stretch}
+  .generator-buttons .btn{flex:1}
+  .generator-grid{grid-template-columns:1fr}
+  .practice-card{padding:24px 18px}
+  .practice-main{font-size:28px}
+  .dict-input{font-size:18px}
+  .weak-card{grid-template-columns:1fr}
+  .weak-actions{justify-content:flex-start}
+  .match-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <div class="brand"><span>Clara词研堂</span>：以AI伴读，达词句贯通</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPanel('manage')" id="tab-manage">✏️ 录入单词</button>
+    <button class="nav-tab" onclick="showPanel('browse')" id="tab-browse">📋 卡片浏览</button>
+    <button class="nav-tab" onclick="showPanel('readword')" id="tab-readword">🎤 跟读单词</button>
+    <button class="nav-tab" onclick="showPanel('listen')" id="tab-listen">👂 听说练习</button>
+    <button class="nav-tab" onclick="showPanel('dictation')" id="tab-dictation">✍️ 听写练习</button>
+    <button class="nav-tab" onclick="showPanel('sentence')" id="tab-sentence">💬 句子拓展</button>
+    <button class="nav-tab" onclick="showPanel('weak')" id="tab-weak">🧠 薄弱词仓</button>
+    <button class="nav-tab" onclick="showPanel('story')" id="tab-story">📖 Clara 小语篇</button>
+    <button class="nav-tab" onclick="showPanel('game')" id="tab-game">🎮 极速配</button>
+    <button class="nav-tab" onclick="showPanel('report')" id="tab-report">📊 学习战报</button>
+  </div>
+  <div class="lesson-badge" id="active-badge">未选课时</div>
+</nav>
+
+<!-- MANAGE PANEL -->
+<div class="panel active" id="panel-manage">
+  <div class="sec-title">课时管理</div>
+  <div class="sec-sub">先创建课时，再录入单词和例句，数据自动保存在本设备。</div>
+
+  <div class="lesson-list" id="lesson-list"></div>
+  <div class="add-lesson-row">
+    <input type="text" id="new-lesson-name" placeholder="课时名称，例如：Unit 2 环境" maxlength="40">
+    <button class="btn btn-primary" onclick="addLesson()">+ 新建课时</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <div id="word-editor" style="display:none">
+    <div class="editor-header">
+      <h3 id="editor-title">📝 单词录入</h3>
+      <button class="btn btn-outline btn-sm" onclick="toggleImport()">📥 批量导入</button>
+      <button class="btn btn-green btn-sm" onclick="saveWords()">💾 保存</button>
+    </div>
+
+    <div id="import-box" class="import-box" style="display:none">
+      <p><b>智能批量导入</b>：可以粘贴一整段，也可以每行一个；系统会自动拆分英文和中文。逗号/Tab 格式仍然支持，第三列可写例句。</p>
+      <textarea id="import-text" placeholder="look after照顾；照料 planet星球 is called 叫做 live居住 air空气 oxygen氧气 water水 clean干净的 keep保持 important重要的 turn off关闭 turn on打开 tap水龙头 have a shower淋浴 save water节约用水 light灯 recycle 回收；循环利用 plastic塑料"></textarea>
+      <div class="import-actions">
+        <button class="btn btn-primary btn-sm" onclick="doImport()">智能识别并导入</button>
+        <button class="btn btn-outline btn-sm" onclick="previewImport()">预览识别</button>
+        <button class="btn btn-outline btn-sm" onclick="toggleImport()">取消</button>
+      </div>
+      <div class="image-import-row">
+        <input class="file-input" id="import-image" type="file" accept="image/*" onchange="ocrImportImage(this.files[0])">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-image').click()">上传图片识别</button>
+        <span class="hint-text">图片识别首次需要联网加载 OCR 引擎，识别后可在文本框里修改再导入。</span>
+      </div>
+      <div id="import-status" class="import-status">支持示例：look after照顾；照料 planet星球；也支持每行“look after 照顾；照料”。</div>
+    </div>
+
+    <div class="row-labels">
+      <span class="row-label">英文单词 / 词组</span>
+      <span class="row-label">中文意思</span>
+      <span class="row-label">例句（选填）</span>
+      <span></span>
+    </div>
+    <div class="word-rows" id="word-rows"></div>
+    <div class="add-word-row">
+      <button class="btn btn-outline btn-sm" onclick="addWordRow()">+ 添加一行</button>
+      <button class="btn btn-outline btn-sm" onclick="addWordRows(5)">+ 批量添加5行</button>
+    </div>
+    <p class="hint-text">💡 例句填写后，"句子拓展"栏目会自动出现这些句子供学生跟读。支持中英文例句（用"/"分隔），例如：<br>We should look after our planet./我们应该照顾我们的星球。</p>
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="saveWords()">💾 保存单词</button>
+      <button class="btn btn-outline" onclick="clearRows()">清空</button>
+    </div>
+  </div>
+</div>
+
+<!-- BROWSE PANEL -->
+<div class="panel" id="panel-browse">
+  <div class="sec-title">卡片浏览</div>
+  <div class="sec-sub" id="browse-sub">点击卡片听发音，跟着说一遍！</div>
+  <div id="browse-content"></div>
+</div>
+
+<!-- READ WORD PANEL -->
+<div class="panel" id="panel-readword">
+  <div class="sec-title">跟读单词</div>
+  <div class="sec-sub">听发音 → 跟读 → 翻下一个，反复练习</div>
+  <div id="readword-content"></div>
+</div>
+
+<!-- LISTEN SPEAK PANEL -->
+<div class="panel" id="panel-listen">
+  <div class="sec-title">听说练习</div>
+  <div class="sec-sub">先听英文，学生自己说中文，再点开答案核对</div>
+  <div id="listen-content"></div>
+</div>
+
+<!-- DICTATION PANEL -->
+<div class="panel" id="panel-dictation">
+  <div class="sec-title">听写练习</div>
+  <div class="sec-sub">听英文发音，自己拼写单词或词组，系统自动检查</div>
+  <div id="dictation-content"></div>
+</div>
+
+<!-- SENTENCE PANEL -->
+<div class="panel" id="panel-sentence">
+  <div class="sec-title">句子拓展跟读</div>
+  <div class="sec-sub">听例句，模仿发音，理解单词用法</div>
+  <div id="sentence-content"></div>
+</div>
+
+<!-- WEAK PANEL -->
+<div class="panel" id="panel-weak">
+  <div class="sec-title">薄弱词仓</div>
+  <div class="sec-sub">自动收集听写错误和手动标记的需复习单词，复习更有靶心。</div>
+  <div id="weak-content"></div>
+</div>
+
+<!-- STORY PANEL -->
+<div class="panel" id="panel-story">
+  <div class="sec-title">Clara 小语篇</div>
+  <div class="sec-sub">把本课单词串成一篇短文，听读结合，看词如何连成语境。</div>
+  <div id="story-content"></div>
+</div>
+
+<!-- GAME PANEL -->
+<div class="panel" id="panel-game">
+  <div class="sec-title">极速配</div>
+  <div class="sec-sub">英文和中文快速配对，练反应，也练记忆。</div>
+  <div id="game-content"></div>
+</div>
+
+<!-- REPORT PANEL -->
+<div class="panel" id="panel-report">
+  <div class="sec-title">学习战报</div>
+  <div class="sec-sub">今日学习、听写正确率、跟读复盘和连续打卡一眼看清。</div>
+  <div id="report-content"></div>
+</div>
+
+<div class="save-toast" id="toast">✅ 已保存</div>
+
+<script>
+// ─── DATA ───
+let lessons = [];
+let activeLessonId = null;
+let playingIdx = -1;
+let readIdx = 0;
+let sReadIdx = 0;
+let autoActive = false;
+let autoTimer = null;
+let readTarget = 'word'; // 'word' or 'sentence'
+let listenIdx = 0;
+let listenAnswerShown = false;
+let listenShowWord = false;
+let dictIdx = 0;
+let dictChecked = false;
+let studyStats = null;
+let gameState = null;
+let gameTimer = null;
+
+function load() {
+  try { lessons = JSON.parse(localStorage.getItem('vocab_lessons') || '[]'); } catch(e){ lessons=[]; }
+  try { activeLessonId = localStorage.getItem('vocab_active') || null; } catch(e){ activeLessonId=null; }
+  try { studyStats = JSON.parse(localStorage.getItem('vocab_stats') || 'null'); } catch(e){ studyStats=null; }
+  if(!studyStats) studyStats = freshStats();
+  if (activeLessonId && !lessons.find(l=>l.id===activeLessonId)) activeLessonId = null;
+}
+function save() {
+  localStorage.setItem('vocab_lessons', JSON.stringify(lessons));
+  localStorage.setItem('vocab_stats', JSON.stringify(studyStats||freshStats()));
+  if (activeLessonId) localStorage.setItem('vocab_active', activeLessonId);
+  showToast();
+}
+function getActive() { return lessons.find(l=>l.id===activeLessonId) || null; }
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function showToast() {
+  const t = document.getElementById('toast'); t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+function todayStr(){return new Date().toISOString().slice(0,10);}
+function freshStats(){return{today:todayStr(),words:{},dictRight:0,dictWrong:0,readGood:0,readWeak:0,streak:0,lastStudyDate:''};}
+function ensureToday(){
+  const t=todayStr();
+  if(!studyStats) studyStats=freshStats();
+  if(studyStats.today!==t){
+    const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+    studyStats={...freshStats(),streak:studyStats.lastStudyDate===yesterday?(studyStats.streak||0):0,lastStudyDate:studyStats.lastStudyDate||''};
+  }
+}
+function recordStudy(kind,ok,word){
+  ensureToday();
+  if(word?.en) studyStats.words[normalizeAnswer(word.en)]={en:word.en,zh:word.zh||''};
+  if(kind==='dictation') ok?studyStats.dictRight++:studyStats.dictWrong++;
+  if(kind==='read') ok?studyStats.readGood++:studyStats.readWeak++;
+  const t=todayStr();
+  if(studyStats.lastStudyDate!==t){studyStats.streak=(studyStats.streak||0)+1;studyStats.lastStudyDate=t;}
+  localStorage.setItem('vocab_stats', JSON.stringify(studyStats));
+}
+function markWeak(word,reason){
+  if(!word) return;
+  word.weakCount=(word.weakCount||0)+1;
+  word.weakReason=reason;
+  word.weakAt=new Date().toLocaleString();
+  word.mastered=false;
+}
+function clearWeak(word){
+  if(!word) return;
+  word.mastered=true;
+  word.weakCount=0;
+  word.weakReason='';
+  word.weakAt='';
+}
+
+// ─── LESSONS ───
+function renderLessons() {
+  const el = document.getElementById('lesson-list');
+  if (!lessons.length) { el.innerHTML='<p style="font-size:13px;color:var(--text-3);padding:8px 0">还没有课时，先创建一个吧</p>'; return; }
+  el.innerHTML = lessons.map(l=>`
+    <div class="lesson-item${l.id===activeLessonId?' active-lesson':''}" onclick="selectLesson('${l.id}')">
+      <span style="font-size:18px">${l.id===activeLessonId?'✅':'📖'}</span>
+      <span class="lesson-name">${escHtml(l.name)}</span>
+      <span class="lesson-count">${(l.words||[]).filter(w=>w.en).length} 个单词</span>
+      <div class="lesson-actions">
+        <button class="icon-btn" onclick="event.stopPropagation();renameLesson('${l.id}')" title="重命名">✏️</button>
+        <button class="icon-btn" onclick="event.stopPropagation();deleteLesson('${l.id}')" title="删除">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function addLesson() {
+  const inp = document.getElementById('new-lesson-name');
+  const name = inp.value.trim();
+  if (!name) { inp.focus(); return; }
+  const l = {id:uid(), name, words:[]};
+  lessons.push(l);
+  inp.value='';
+  save();
+  selectLesson(l.id);
+}
+function selectLesson(id) {
+  activeLessonId = id;
+  renderLessons();
+  renderEditor();
+  updateBadge();
+}
+function deleteLesson(id) {
+  if (!confirm('确定删除这个课时？单词数据也会一并删除。')) return;
+  lessons = lessons.filter(l=>l.id!==id);
+  if (activeLessonId===id) { activeLessonId = lessons[0]?.id||null; }
+  save();
+  renderLessons(); renderEditor(); updateBadge();
+}
+function renameLesson(id) {
+  const l = lessons.find(x=>x.id===id); if(!l) return;
+  const n = prompt('新的课时名称：', l.name);
+  if (n && n.trim()) { l.name=n.trim(); save(); renderLessons(); updateBadge(); }
+}
+function updateBadge() {
+  const l = getActive();
+  document.getElementById('active-badge').textContent = l ? l.name : '未选课时';
+}
+
+// ─── WORD EDITOR ───
+function renderEditor() {
+  const l = getActive();
+  const ed = document.getElementById('word-editor');
+  if (!l) { ed.style.display='none'; return; }
+  ed.style.display='block';
+  document.getElementById('editor-title').textContent = `📝 ${l.name} — 单词录入`;
+  renderRows(l.words||[]);
+}
+function renderRows(words) {
+  const c = document.getElementById('word-rows');
+  const rows = words.length ? words : [{en:'',zh:'',sentence:''}];
+  c.innerHTML = rows.map((w,i)=>`
+    <div class="word-row" data-i="${i}">
+      <input type="text" placeholder="英文单词/词组" value="${escVal(w.en)}" oninput="rowChange(${i},'en',this.value)">
+      <input type="text" placeholder="中文意思" value="${escVal(w.zh)}" oninput="rowChange(${i},'zh',this.value)">
+      <input type="text" placeholder="例句（选填）" value="${escVal(w.sentence||'')}" oninput="rowChange(${i},'sentence',this.value)">
+      <button class="del-row" onclick="delRow(${i})" title="删除">×</button>
+    </div>`).join('');
+}
+function getCurrentRows() {
+  const rows = document.querySelectorAll('#word-rows .word-row');
+  return Array.from(rows).map(r=>{
+    const inputs = r.querySelectorAll('input');
+    return {en:inputs[0].value.trim(), zh:inputs[1].value.trim(), sentence:inputs[2].value.trim()};
+  }).filter(w=>w.en||w.zh);
+}
+function rowChange(i,field,val) { /* live - no-op, read on save */ }
+function addWordRow() {
+  const l = getActive(); if(!l) return;
+  const w = getCurrentRows();
+  w.push({en:'',zh:'',sentence:''});
+  renderRows(w);
+  document.querySelectorAll('#word-rows .word-row input')[w.length*4-4]?.focus();
+}
+function addWordRows(n) {
+  const l = getActive(); if(!l) return;
+  const w = getCurrentRows();
+  for(let i=0;i<n;i++) w.push({en:'',zh:'',sentence:''});
+  renderRows(w);
+}
+function delRow(i) {
+  const w = getCurrentRows(); w.splice(i,1);
+  if(!w.length) w.push({en:'',zh:'',sentence:''});
+  renderRows(w);
+}
+function clearRows() {
+  if(!confirm('清空所有行？')) return;
+  renderRows([]);
+}
+function saveWords() {
+  const l = getActive(); if(!l) return;
+  const oldByEn = new Map((l.words||[]).map(w=>[normalizeAnswer(w.en), w]));
+  l.words = getCurrentRows().filter(w=>w.en).map(w=>{
+    const old=oldByEn.get(normalizeAnswer(w.en));
+    return old ? {...old, ...w} : w;
+  });
+  save(); renderLessons();
+}
+function toggleImport() {
+  const b = document.getElementById('import-box');
+  b.style.display = b.style.display==='none'?'block':'none';
+}
+function setImportStatus(text,isBad){
+  const el=document.getElementById('import-status');
+  if(el){el.textContent=text;el.style.color=isBad?'var(--red)':'var(--text-3)';}
+}
+function previewImport(){
+  const text=document.getElementById('import-text').value.trim();
+  const parsed=parseImportText(text);
+  if(!parsed.length){setImportStatus('没有识别到单词，请检查文本里是否包含英文和中文。',true);return;}
+  const sample=parsed.slice(0,12).map(w=>`${w.en} = ${w.zh}${w.sentence?' | '+w.sentence:''}`).join('； ');
+  setImportStatus(`识别到 ${parsed.length} 条：${sample}${parsed.length>12?' ...':''}`);
+}
+function doImport() {
+  const text = document.getElementById('import-text').value.trim();
+  if (!text) return;
+  const parsed = parseImportText(text);
+  if (!parsed.length) { alert('没有识别到数据，请检查格式'); return; }
+  const existing = getCurrentRows().filter(w=>w.en);
+  renderRows([...existing, ...parsed]);
+  document.getElementById('import-text').value='';
+  document.getElementById('import-box').style.display='none';
+  setImportStatus(`已导入 ${parsed.length} 条`);
+}
+function parseImportText(text){
+  if(!text) return [];
+  const normalized=text
+    .replace(/\r/g,'\n')
+    .replace(/[，]/g,',')
+    .replace(/[。]/g,'.')
+    .replace(/[：]/g,':')
+    .replace(/[、]+/g,' ')
+    .replace(/[“”]/g,'"')
+    .replace(/[‘’]/g,"'");
+  const rows=[];
+  normalized.split('\n').map(x=>x.trim()).filter(Boolean).forEach(line=>{
+    const table=parseTableLine(line);
+    if(table.length){rows.push(...table);return;}
+    rows.push(...parseMixedLine(line));
+  });
+  if(!rows.length) rows.push(...parseMixedLine(normalized.replace(/\n+/g,' ')));
+  return dedupeImportRows(rows).filter(w=>w.en&&w.zh);
+}
+function parseTableLine(line){
+  const parts=line.split(/\t|,/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length>=2 && hasEnglish(parts[0]) && hasChinese(parts[1])){
+    return [{en:cleanEn(parts[0]),zh:cleanZh(parts[1]),sentence:(parts.slice(2).join(', ')||'').trim()}];
+  }
+  return [];
+}
+function parseMixedLine(line){
+  const compact=line
+    .replace(/\s*([;；])\s*/g,'$1')
+    .replace(/\s+/g,' ')
+    .trim();
+  const rows=[];
+  const re=/([A-Za-z][A-Za-z'’.\-]*(?:\s+[A-Za-z][A-Za-z'’.\-]*)*)\s*([\u3400-\u9fff][\u3400-\u9fff；;、，,（）()《》〈〉\s]*)/g;
+  let m;
+  while((m=re.exec(compact))){
+    const en=cleanEn(m[1]);
+    const zh=cleanZh(m[2]);
+    if(en&&zh) rows.push({en,zh,sentence:''});
+  }
+  return rows;
+}
+function cleanEn(s){
+  return (s||'')
+    .replace(/^[\s,.;:!?，。；：！？\-–—]+|[\s,.;:!?，。；：！？\-–—]+$/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function cleanZh(s){
+  return (s||'')
+    .replace(/^[\s,，。；;:：]+|[\s,，。]+$/g,'')
+    .replace(/\s+/g,'')
+    .trim();
+}
+function hasEnglish(s){return /[A-Za-z]/.test(s||'');}
+function hasChinese(s){return /[\u3400-\u9fff]/.test(s||'');}
+function dedupeImportRows(rows){
+  const seen=new Set();
+  return rows.filter(w=>{
+    const key=cleanEn(w.en).toLowerCase();
+    if(!key||seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+async function ocrImportImage(file){
+  if(!file) return;
+  const box=document.getElementById('import-text');
+  setImportStatus('正在加载图片识别引擎，首次使用可能需要几十秒...');
+  try{
+    await loadTesseract();
+    setImportStatus('正在识别图片文字...');
+    const result=await Tesseract.recognize(file,'eng+chi_sim',{logger:m=>{
+      if(m.status&&m.progress!=null) setImportStatus(`图片识别中：${m.status} ${Math.round(m.progress*100)}%`);
+    }});
+    const text=result?.data?.text?.trim()||'';
+    if(!text){setImportStatus('图片里没有识别到文字，可以换一张更清晰的图片。',true);return;}
+    box.value=(box.value.trim()?box.value.trim()+'\n':'')+text;
+    const parsed=parseImportText(box.value);
+    setImportStatus(`图片文字已放入文本框，当前可识别 ${parsed.length} 条。请检查后点击导入。`);
+  }catch(e){
+    console.error(e);
+    setImportStatus('图片识别失败。请确认网络可用，或先用手机/系统 OCR 把图片文字复制到文本框。',true);
+  }
+}
+function loadTesseract(){
+  if(window.Tesseract) return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=resolve;
+    s.onerror=reject;
+    document.head.appendChild(s);
+  });
+}
+
+// ─── SPEECH ───
+function speak(text, lang, onEnd) {
+  if (!window.speechSynthesis) { alert('浏览器不支持语音，请用 Chrome 或 Safari'); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang||'en-US'; u.rate=0.82;
+  if (onEnd) { u.onend=onEnd; u.onerror=onEnd; }
+  window.speechSynthesis.speak(u);
+}
+function speakEN(text,onEnd){ speak(text,'en-US',onEnd); }
+function speakZH(text,onEnd){ speak(text,'zh-CN',onEnd); }
+
+// ─── BROWSE ───
+function renderBrowse() {
+  const l = getActive();
+  const c = document.getElementById('browse-content');
+  if (!l || !l.words.length) { c.innerHTML='<div class="no-words">📭 当前课时还没有单词，请先在"录入单词"中添加</div>'; return; }
+  c.innerHTML=`<p class="browse-hint">👇 点击卡片听发音，跟着说一遍！共 ${l.words.length} 个</p><div class="word-grid" id="browse-grid"></div>`;
+  renderBrowseGrid(l.words);
+}
+function renderBrowseGrid(words) {
+  const g = document.getElementById('browse-grid'); if(!g) return;
+  g.innerHTML=words.map((w,i)=>`
+    <div class="word-card${playingIdx===i?' playing':''}" onclick="browseClick(${i})" role="button">
+      <span class="wc-speaker">${playingIdx===i?'🔊':'🔈'}</span>
+      <div class="wc-en">${escHtml(w.en)}</div>
+      <div class="wc-zh">${escHtml(w.zh)}</div>
+    </div>`).join('');
+}
+function browseClick(i) {
+  const l=getActive(); if(!l) return;
+  playingIdx=i; renderBrowseGrid(l.words);
+  speakEN(l.words[i].en, ()=>{ playingIdx=-1; renderBrowseGrid(l.words); });
+}
+
+// ─── READ WORD ───
+function renderReadWord() {
+  const l=getActive();
+  const c=document.getElementById('readword-content');
+  if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
+  readIdx=Math.min(readIdx,l.words.length-1);
+  const w=l.words[readIdx];
+  const hasSent=w.sentence&&w.sentence.trim();
+  const parts=hasSent?parseSentence(w.sentence):null;
+  c.innerHTML=`
+    <div class="read-wrap">
+      <div class="read-card">
+        <div class="read-en" id="rw-en">${escHtml(w.en)}</div>
+        <div class="read-zh" id="rw-zh">${escHtml(w.zh)}</div>
+        ${hasSent?`<div class="read-sentence has-data">
+          <div class="s-en">📖 ${escHtml(parts.en)}</div>
+          ${parts.zh?`<div class="s-zh">${escHtml(parts.zh)}</div>`:''}
+        </div>`:'<div class="read-sentence"></div>'}
+      </div>
+      <button class="speak-btn" id="rw-speak-btn" onclick="rwSpeak()">🔊 朗读发音</button>
+      <div class="practice-actions">
+        <button class="nav-btn" onclick="rwMark(true)">已掌握</button>
+        <button class="nav-btn" onclick="rwMark(false)">需复习</button>
+      </div>
+      <div class="nav-row">
+        <button class="nav-btn" onclick="rwPrev()">← 上一个</button>
+        <span class="prog-label">${readIdx+1} / ${l.words.length}</span>
+        <button class="nav-btn" onclick="rwNext()">下一个 →</button>
+      </div>
+      <div class="auto-row">
+        <label><input type="checkbox" id="rw-auto" onchange="rwToggleAuto()"> 自动朗读并翻页</label>
+        <span>间隔</span>
+        <select id="rw-interval">
+          <option value="2000">2秒</option>
+          <option value="3000" selected>3秒</option>
+          <option value="4000">4秒</option>
+          <option value="5000">5秒</option>
+        </select>
+        <label><input type="checkbox" id="rw-sent" onchange=""> 朗读例句</label>
+      </div>
+    </div>`;
+}
+function rwSpeak(cb) {
+  const l=getActive(); if(!l) return;
+  const w=l.words[readIdx];
+  const btn=document.getElementById('rw-speak-btn');
+  if(btn){btn.classList.add('speaking');btn.textContent='🔊 播放中...';}
+  const includeSent=document.getElementById('rw-sent')?.checked&&w.sentence;
+  const afterWord=()=>{
+    if(includeSent){
+      const p=parseSentence(w.sentence);
+      speakEN(p.en,()=>{ resetSpeakBtn(btn); if(cb)cb(); });
+    } else { resetSpeakBtn(btn); if(cb)cb(); }
+  };
+  speakEN(w.en, afterWord);
+}
+function resetSpeakBtn(btn){if(btn){btn.classList.remove('speaking');btn.textContent='🔊 朗读发音';}}
+function rwNext(){rwStop();readIdx=(readIdx+1)%(getActive()?.words.length||1);renderReadWord();if(autoActive)rwSpeakSchedule();}
+function rwPrev(){rwStop();readIdx=(readIdx-1+( getActive()?.words.length||1))%( getActive()?.words.length||1);renderReadWord();}
+function rwSpeakSchedule(){rwSpeak(()=>{if(!autoActive)return;const d=parseInt(document.getElementById('rw-interval')?.value||3000);autoTimer=setTimeout(()=>{if(!autoActive)return;readIdx=(readIdx+1)%( getActive()?.words.length||1);renderReadWord();rwSpeakSchedule();},d);});}
+function rwToggleAuto(){autoActive=document.getElementById('rw-auto')?.checked;if(autoActive)rwSpeakSchedule();else rwStop();}
+function rwStop(){autoActive=false;const cb=document.getElementById('rw-auto');if(cb)cb.checked=false;clearTimeout(autoTimer);if(window.speechSynthesis)window.speechSynthesis.cancel();const btn=document.getElementById('rw-speak-btn');resetSpeakBtn(btn);}
+function rwMark(ok){
+  const l=getActive(); if(!l) return;
+  const w=l.words[readIdx];
+  recordStudy('read',ok,w);
+  ok ? clearWeak(w) : markWeak(w,'跟读需复习');
+  save();
+  renderReadWord();
+}
+
+// ─── LISTEN SPEAK MODE ───
+function renderListen(){
+  const l=getActive();
+  const c=document.getElementById('listen-content');
+  if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
+  listenIdx=Math.min(listenIdx,l.words.length-1);
+  const w=l.words[listenIdx];
+  c.innerHTML=`
+    <div class="read-wrap">
+      <div class="practice-card">
+        <div class="practice-kicker">LISTEN AND SAY IN CHINESE</div>
+        <div class="practice-prompt">点击播放英文，学生先自己说出中文意思</div>
+        <div class="practice-main">${escHtml(maskWord(w.en))}</div>
+        <div class="practice-answer${listenAnswerShown?' show':''}" id="listen-answer">${escHtml(w.zh||'（未填写中文）')}</div>
+      </div>
+      <div class="practice-actions">
+        <button class="speak-btn" id="listen-speak-btn" onclick="listenSpeak()">🔊 播放英文</button>
+        <button class="nav-btn" onclick="listenReveal()">显示答案</button>
+        <button class="nav-btn" onclick="listenSpeakZh()">朗读中文</button>
+        <button class="nav-btn" onclick="listenMark(false)">需复习</button>
+        <button class="nav-btn" onclick="listenMark(true)">已掌握</button>
+      </div>
+      <div class="nav-row">
+        <button class="nav-btn" onclick="listenPrev()">← 上一个</button>
+        <span class="prog-label">${listenIdx+1} / ${l.words.length}</span>
+        <button class="nav-btn" onclick="listenNext()">下一个 →</button>
+      </div>
+      <div class="auto-row">
+        <label><input type="checkbox" id="listen-show-word" onchange="listenToggleWord()" ${listenShowWord?'checked':''}> 显示英文文字</label>
+      </div>
+    </div>`;
+}
+function maskWord(text){
+  return listenShowWord ? text : '••••••';
+}
+function listenToggleWord(){listenShowWord=document.getElementById('listen-show-word')?.checked||false;renderListen();}
+function listenSpeak(){
+  const l=getActive();if(!l)return;
+  const btn=document.getElementById('listen-speak-btn');
+  if(btn){btn.classList.add('speaking');btn.textContent='🔊 播放中...';}
+  speakEN(l.words[listenIdx].en,()=>{if(btn){btn.classList.remove('speaking');btn.textContent='🔊 播放英文';}});
+}
+function listenSpeakZh(){const l=getActive();if(!l)return;speakZH(l.words[listenIdx].zh||'');}
+function listenReveal(){listenAnswerShown=true;document.getElementById('listen-answer')?.classList.add('show');}
+function listenMark(ok){
+  const l=getActive();if(!l)return;
+  const w=l.words[listenIdx];
+  recordStudy('listen',ok,w);
+  ok ? clearWeak(w) : markWeak(w,'听说需复习');
+  save();
+  renderListen();
+}
+function listenNext(){listenAnswerShown=false;listenIdx=(listenIdx+1)%(getActive()?.words.length||1);renderListen();listenSpeak();}
+function listenPrev(){listenAnswerShown=false;listenIdx=(listenIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);renderListen();}
+
+// ─── DICTATION MODE ───
+function renderDictation(){
+  const l=getActive();
+  const c=document.getElementById('dictation-content');
+  if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
+  dictIdx=Math.min(dictIdx,l.words.length-1);
+  const w=l.words[dictIdx];
+  c.innerHTML=`
+    <div class="read-wrap">
+      <div class="practice-card">
+        <div class="practice-kicker">DICTATION</div>
+        <div class="practice-prompt">听发音，拼写英文单词或词组</div>
+        <div class="hint-chip">${escHtml(w.zh||'未填写中文')}</div>
+        <div style="height:16px"></div>
+        <input class="dict-input" id="dict-input" autocomplete="off" spellcheck="false" placeholder="输入英文拼写">
+        <div class="feedback" id="dict-feedback"></div>
+      </div>
+      <div class="practice-actions">
+        <button class="speak-btn" id="dict-speak-btn" onclick="dictSpeak()">🔊 播放英文</button>
+        <button class="nav-btn" onclick="dictCheck()">检查</button>
+        <button class="nav-btn" onclick="dictHint()">提示</button>
+        <button class="nav-btn" onclick="dictReveal()">显示答案</button>
+      </div>
+      <div class="nav-row">
+        <button class="nav-btn" onclick="dictPrev()">← 上一个</button>
+        <span class="prog-label">${dictIdx+1} / ${l.words.length}</span>
+        <button class="nav-btn" onclick="dictNext()">下一个 →</button>
+      </div>
+    </div>`;
+  const inp=document.getElementById('dict-input');
+  inp?.addEventListener('keydown',e=>{if(e.key==='Enter'){dictChecked?dictNext():dictCheck();}});
+  setTimeout(()=>{inp?.focus();dictSpeak();},120);
+}
+function normalizeAnswer(s){return(s||'').toLowerCase().replace(/[’']/g,'').replace(/[-_]+/g,' ').replace(/[.,!?;:]/g,'').replace(/\s+/g,' ').trim();}
+function dictSpeak(){
+  const l=getActive();if(!l)return;
+  const btn=document.getElementById('dict-speak-btn');
+  if(btn){btn.classList.add('speaking');btn.textContent='🔊 播放中...';}
+  speakEN(l.words[dictIdx].en,()=>{if(btn){btn.classList.remove('speaking');btn.textContent='🔊 播放英文';}});
+}
+function dictCheck(){
+  const l=getActive();if(!l)return;
+  const w=l.words[dictIdx];
+  const input=document.getElementById('dict-input');
+  const fb=document.getElementById('dict-feedback');
+  const ok=normalizeAnswer(input?.value)===normalizeAnswer(w.en);
+  dictChecked=ok;
+  recordStudy('dictation',ok,w);
+  if(!ok) markWeak(w,'听写错误'); else if((w.weakCount||0)>0) w.weakCount=Math.max(0,(w.weakCount||0)-1);
+  save();
+  input?.classList.toggle('correct',ok);
+  input?.classList.toggle('wrong',!ok);
+  if(fb){fb.className='feedback '+(ok?'ok':'bad');fb.textContent=ok?'正确！可以进入下一个。':'再听一遍，注意拼写和空格。';}
+  if(ok) speakEN(w.en);
+}
+function dictHint(){
+  const l=getActive();if(!l)return;
+  const ans=l.words[dictIdx].en;
+  const hint=ans.replace(/[A-Za-z]/g,(ch,i)=>i===0||ans[i-1]===' ' ? ch : '_');
+  const fb=document.getElementById('dict-feedback');
+  if(fb){fb.className='feedback';fb.textContent='提示：'+hint;}
+}
+function dictReveal(){
+  const l=getActive();if(!l)return;
+  const w=l.words[dictIdx];
+  markWeak(w,'查看听写答案');
+  recordStudy('dictation',false,w);
+  save();
+  const input=document.getElementById('dict-input');
+  if(input){input.value=l.words[dictIdx].en;input.classList.remove('wrong');input.classList.add('correct');}
+  const fb=document.getElementById('dict-feedback');
+  if(fb){fb.className='feedback ok';fb.textContent='答案已显示，跟读一遍再继续。';}
+  dictChecked=true;
+  speakEN(l.words[dictIdx].en);
+}
+function dictNext(){dictChecked=false;dictIdx=(dictIdx+1)%(getActive()?.words.length||1);renderDictation();}
+function dictPrev(){dictChecked=false;dictIdx=(dictIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);renderDictation();}
+
+// ─── SENTENCE MODE ───
+function parseSentence(s){
+  if(!s) return {en:'',zh:''};
+  const parts=s.split('/');
+  const en=parts[0]?.trim()||s;
+  const zh=parts[1]?.trim()||'';
+  return{en,zh};
+}
+function renderSentence(){
+  const l=getActive();
+  const c=document.getElementById('sentence-content');
+  if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
+  const sents=l.words.filter(w=>w.sentence&&w.sentence.trim());
+  const genHtml=renderSentenceGenerator();
+  if(!sents.length){
+    c.innerHTML=genHtml+`<div class="empty-state"><div class="emoji">💬</div><p>当前课时还没有例句。<br>可以点击上方按钮自动生成，或在"录入单词"中手动填写例句。<br>格式：<b>We should look after our planet./我们应该照顾我们的星球。</b></p></div>`;
+    return;
+  }
+  const tabsHtml=`<div class="tab-inner">
+    <button class="active" id="stab-list" onclick="sSwitchTab('list')">📋 列表浏览</button>
+    <button id="stab-read" onclick="sSwitchTab('read')">🎤 逐句跟读</button>
+  </div>`;
+  c.innerHTML=genHtml+tabsHtml+`<div id="s-list-view"></div><div id="s-read-view" style="display:none"></div>`;
+  renderSentList(sents);
+  renderSentRead(sents);
+}
+function renderSentenceGenerator(){
+  const cfg=getAiConfig();
+  return `<div class="generator-box">
+    <div class="generator-head">
+      <h3>✨ 自动生成相关句子</h3>
+    </div>
+    <div class="generator-tools">
+      <select id="ai-level">
+        <option value="natural" ${cfg.level==='natural'?'selected':''}>日常地道用法：真实生活场景</option>
+        <option value="spoken" ${cfg.level==='spoken'?'selected':''}>电影/口语风格：自然对白参考</option>
+        <option value="exam" ${cfg.level==='exam'?'selected':''}>真题风格：阅读/完形原创新句</option>
+      </select>
+      <div class="generator-buttons">
+        <button class="btn btn-primary btn-sm" onclick="generateSentences('missing')">补全缺失</button>
+        <button class="btn btn-outline btn-sm" onclick="generateSentences('all')">全部重生成</button>
+      </div>
+    </div>
+    <details class="generator-settings">
+      <summary>AI 设置</summary>
+      <div class="generator-grid">
+        <input type="password" id="ai-key" placeholder="API Key（留空使用本地例句库）" value="${escVal(cfg.key)}">
+        <input type="text" id="ai-endpoint" placeholder="接口地址" value="${escVal(cfg.endpoint)}">
+        <input type="text" id="ai-model" placeholder="模型名" value="${escVal(cfg.model)}">
+      </div>
+    </details>
+    <div class="generator-status" id="generator-status">选择句子风格后生成；未配置 AI 时使用本地精选例句库。</div>
+  </div>`;
+}
+function getAiConfig(){
+  return {
+    key:localStorage.getItem('vocab_ai_key')||'',
+    endpoint:localStorage.getItem('vocab_ai_endpoint')||'https://api.openai.com/v1/chat/completions',
+    model:localStorage.getItem('vocab_ai_model')||'gpt-4.1-mini',
+    level:localStorage.getItem('vocab_ai_level')||'natural'
+  };
+}
+function readAiConfig(){
+  const cfg={
+    key:document.getElementById('ai-key')?.value.trim()||'',
+    endpoint:document.getElementById('ai-endpoint')?.value.trim()||'https://api.openai.com/v1/chat/completions',
+    model:document.getElementById('ai-model')?.value.trim()||'gpt-4.1-mini',
+    level:document.getElementById('ai-level')?.value||'natural'
+  };
+  localStorage.setItem('vocab_ai_key',cfg.key);
+  localStorage.setItem('vocab_ai_endpoint',cfg.endpoint);
+  localStorage.setItem('vocab_ai_model',cfg.model);
+  localStorage.setItem('vocab_ai_level',cfg.level);
+  return cfg;
+}
+function setGenStatus(text,isBad){
+  const el=document.getElementById('generator-status');
+  if(el){el.textContent=text;el.style.color=isBad?'var(--red)':'var(--text-3)';}
+}
+async function generateSentences(mode){
+  const l=getActive();if(!l)return;
+  const cfg=readAiConfig();
+  const targets=(l.words||[]).filter(w=>w.en&&(mode==='all'||!w.sentence));
+  if(!targets.length){setGenStatus('当前没有需要生成的单词。');return;}
+  setGenStatus(`正在为 ${targets.length} 个单词生成句子...`);
+  try{
+    const generated=cfg.key?await generateWithAi(targets,cfg):generateWithTemplates(targets,cfg.level);
+    applyGeneratedSentences(l,generated,mode);
+    save();
+    renderEditor();
+    renderSentence();
+    setGenStatus(`已生成并保存 ${generated.length} 条句子。点击下方句子可播放发音。`);
+  }catch(e){
+    console.error(e);
+    const generated=generateWithTemplates(targets,cfg.level);
+    applyGeneratedSentences(l,generated,mode);
+    save();
+    renderEditor();
+    renderSentence();
+    setGenStatus('AI 接口暂时不可用，已改用本地模板生成并保存。',true);
+  }
+}
+async function generateWithAi(words,cfg){
+  const styleText={
+    natural:'natural daily-life usage. The sentence must show how the word or phrase is actually used in a realistic situation',
+    spoken:'movie-like spoken dialogue style, but do not quote or imitate any specific copyrighted line. Make it sound like natural conversation',
+    exam:'original exam-style sentences similar to reading comprehension or cloze-test language. Do not claim they are from a real exam'
+  }[cfg.level]||'natural daily-life usage';
+  const payload={
+    model:cfg.model,
+    messages:[
+      {role:'system',content:'You create useful English example sentences for Chinese English learners. Return only valid JSON. Never write meta sentences like "I can say..." or "remember the word". Do not use quotes around the target word. Do not fabricate movie names, exam years, or source attributions.'},
+      {role:'user',content:`For each item, write one sentence with ${styleText}. Choose a common everyday context for each item. The target English word or phrase must appear naturally and keep its real meaning. Keep English under 16 words when possible. Include an accurate Chinese translation. Return JSON array with keys en, sentence_en, sentence_zh. Items: ${JSON.stringify(words.map(w=>({en:w.en,zh:w.zh})))} `}
+    ],
+    temperature:0.75
+  };
+  const res=await fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify(payload)});
+  if(!res.ok) throw new Error('AI request failed: '+res.status);
+  const data=await res.json();
+  const content=data.choices?.[0]?.message?.content||data.output_text||'';
+  const jsonText=(content.match(/\[[\s\S]*\]/)||[content])[0];
+  const arr=JSON.parse(jsonText);
+  return arr.map(x=>({en:x.en||'',sentence_en:x.sentence_en||x.sentence||'',sentence_zh:x.sentence_zh||x.zh||''})).filter(x=>x.en&&x.sentence_en);
+}
+function generateWithTemplates(words,level){
+  return words.map((w,i)=>{
+    const hit=getKnownSentence(w.en,level);
+    if(hit) return {en:w.en,...hit};
+    const pool=getTemplatePool(level,w);
+    return {en:w.en,...pool[i%pool.length](w)};
+  });
+}
+function getKnownSentence(en,level){
+  const key=normalizeAnswer(en);
+  const natural={
+    'look after':['Can you look after my bag for a minute?','你能帮我照看一下我的包吗？'],
+    'planet':['We need to protect the planet we live on.','我们需要保护我们赖以生存的星球。'],
+    'is called':['This small animal is called a koala.','这种小动物叫作考拉。'],
+    'live':['My grandparents live near the river.','我的祖父母住在河边。'],
+    'air':['Open the window and let in some fresh air.','打开窗户，让新鲜空气进来。'],
+    'oxygen':['Plants give us oxygen during the day.','植物在白天给我们提供氧气。'],
+    'water':['Drink some water before you go outside.','出门前喝点水。'],
+    'clean':['Please keep your desk clean after class.','下课后请保持你的桌面干净。'],
+    'keep':['Keep the door open while I carry the boxes.','我搬箱子的时候让门开着。'],
+    'important':['It is important to listen before you answer.','回答前认真听很重要。'],
+    'turn off':['Turn off the lights when you leave the room.','离开房间时把灯关掉。'],
+    'turn on':['Turn on the tap and wash your hands.','打开水龙头洗手。'],
+    'tap':['The tap is still running in the bathroom.','浴室里的水龙头还在流水。'],
+    'have a shower':['I usually have a shower before dinner.','我通常晚饭前洗个淋浴。'],
+    'save water':['Take shorter showers to save water.','缩短淋浴时间来节约用水。'],
+    'light':['There is a light on in the kitchen.','厨房里有一盏灯亮着。'],
+    'recycle':['We recycle plastic bottles at school.','我们在学校回收塑料瓶。'],
+    'plastic':['Try not to use plastic bags every day.','尽量不要每天使用塑料袋。']
+  };
+  const spoken={
+    'look after':['Look after yourself, and call me when you get home.','照顾好自己，到家后给我打电话。'],
+    'turn off':['Turn off the light. We are trying to sleep.','把灯关掉，我们要睡觉了。'],
+    'turn on':['Could you turn on the TV? The game is starting.','你能打开电视吗？比赛要开始了。'],
+    'have a shower':['I need to have a shower before we go.','我们走之前我得洗个澡。'],
+    'save water':['Come on, save water. You have been in there forever.','拜托，节约点水吧。你在里面太久了。']
+  };
+  const exam={
+    'look after':['Students should learn to look after themselves during the trip.','学生们应该学会在旅行中照顾自己。'],
+    'planet':['Earth is the only planet we know that supports life.','地球是我们所知唯一支持生命的星球。'],
+    'recycle':['More families are learning how to recycle waste properly.','越来越多的家庭正在学习如何正确回收废弃物。'],
+    'plastic':['Plastic waste has become a serious problem for the sea.','塑料垃圾已经成为海洋面临的严重问题。'],
+    'save water':['People can save water by fixing leaking taps.','人们可以通过修理漏水的水龙头来节约用水。']
+  };
+  const bank=level==='spoken'?{...natural,...spoken}:level==='exam'?{...natural,...exam}:natural;
+  return bank[key]?{sentence_en:bank[key][0],sentence_zh:bank[key][1]}:null;
+}
+function getTemplatePool(level,w){
+  if(level==='spoken'){
+    return [
+      x=>({sentence_en:`I did not expect ${articleFor(x.en)} ${x.en} here.`,sentence_zh:`我没想到这里会有${x.zh||x.en}。`}),
+      x=>({sentence_en:`We need to ${x.en} before it gets late.`,sentence_zh:`天晚之前我们需要${x.zh||x.en}。`}),
+      x=>({sentence_en:`Do not forget to ${x.en} before you leave.`,sentence_zh:`离开前别忘了${x.zh||x.en}。`})
+    ];
+  }
+  if(level==='exam'){
+    return [
+      x=>({sentence_en:`Many students find it hard to ${x.en} in a new place.`,sentence_zh:`许多学生发现在新地方${x.zh||x.en}并不容易。`}),
+      x=>({sentence_en:`The report explains why ${x.en} matters to everyday life.`,sentence_zh:`这份报告解释了为什么${x.zh||x.en}与日常生活有关。`}),
+      x=>({sentence_en:`A small change can help people ${x.en} more easily.`,sentence_zh:`一个小改变能帮助人们更容易地${x.zh||x.en}。`})
+    ];
+  }
+  return [
+    x=>({sentence_en:`My family tries to ${x.en} at home.`,sentence_zh:`我的家人在家里尽量${x.zh||x.en}。`}),
+    x=>({sentence_en:`We talked about ${x.en} after class.`,sentence_zh:`下课后我们聊到了${x.zh||x.en}。`}),
+    x=>({sentence_en:`This habit helps us ${x.en} every day.`,sentence_zh:`这个习惯帮助我们每天${x.zh||x.en}。`})
+  ];
+}
+function articleFor(text){
+  return /^[aeiou]/i.test(text||'')?'an':'a';
+}
+function applyGeneratedSentences(lesson,generated,mode){
+  generated.forEach(g=>{
+    const w=lesson.words.find(x=>normalizeAnswer(x.en)===normalizeAnswer(g.en));
+    if(w&&(mode==='all'||!w.sentence)){
+      w.sentence=`${g.sentence_en}/${g.sentence_zh||''}`.trim();
+    }
+  });
+}
+let sSentMode='list';
+function sSwitchTab(t){
+  sSentMode=t;
+  document.getElementById('s-list-view').style.display=t==='list'?'block':'none';
+  document.getElementById('s-read-view').style.display=t==='read'?'flex':'none';
+  document.getElementById('stab-list').classList.toggle('active',t==='list');
+  document.getElementById('stab-read').classList.toggle('active',t==='read');
+  if(t==='read'){document.getElementById('s-read-view').style.display='flex';}
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
+}
+let sPlayIdx=-1;
+function renderSentList(sents){
+  const g=document.getElementById('s-list-view'); if(!g) return;
+  g.innerHTML=`<div class="sentence-list">${sents.map((w,i)=>{
+    const p=parseSentence(w.sentence);
+    return`<div class="sent-card${sPlayIdx===i?' playing':''}" onclick="sPlay(${i})" role="button">
+      <div class="sent-top">
+        <span class="sent-speaker">${sPlayIdx===i?'🔊':'🔈'}</span>
+        <div style="flex:1">
+          <span class="sent-tag">${escHtml(w.en)}</span>
+          <div class="sent-en">${escHtml(p.en)}</div>
+          ${p.zh?`<div class="sent-zh">${escHtml(p.zh)}</div>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+function sPlay(i){
+  const l=getActive();if(!l)return;
+  const sents=l.words.filter(w=>w.sentence&&w.sentence.trim());
+  sPlayIdx=i;renderSentList(sents);
+  const p=parseSentence(sents[i].sentence);
+  speakEN(p.en,()=>{sPlayIdx=-1;renderSentList(sents);});
+}
+let srIdx=0;
+let srAutoActive=false;
+let srAutoTimer=null;
+function renderSentRead(sents){
+  const g=document.getElementById('s-read-view'); if(!g) return;
+  srIdx=Math.min(srIdx,sents.length-1);
+  const w=sents[srIdx];
+  const p=parseSentence(w.sentence);
+  g.style.display='flex';
+  g.style.flexDirection='column';
+  g.style.alignItems='center';
+  g.style.gap='18px';
+  g.innerHTML=`
+    <div class="sread-card">
+      <div class="sread-tag">${escHtml(w.en)}</div>
+      <div class="sread-en">${escHtml(p.en)}</div>
+      ${p.zh?`<div class="sread-zh">${escHtml(p.zh)}</div>`:''}
+    </div>
+    <button class="speak-btn" id="sr-speak-btn" onclick="srSpeak()">🔊 朗读例句</button>
+    <div class="nav-row">
+      <button class="nav-btn" onclick="srPrev()">← 上一句</button>
+      <span class="prog-label">${srIdx+1} / ${sents.length}</span>
+      <button class="nav-btn" onclick="srNext()">下一句 →</button>
+    </div>
+    <div class="auto-row">
+      <label><input type="checkbox" id="sr-auto" onchange="srToggleAuto()"> 自动朗读并翻页</label>
+      <span>间隔</span>
+      <select id="sr-interval">
+        <option value="2500">2.5秒</option>
+        <option value="3500" selected>3.5秒</option>
+        <option value="5000">5秒</option>
+        <option value="7000">7秒</option>
+      </select>
+    </div>`;
+}
+function getSents(){const l=getActive();return(l?.words||[]).filter(w=>w.sentence&&w.sentence.trim());}
+function srSpeak(cb){
+  const sents=getSents();if(!sents.length)return;
+  const p=parseSentence(sents[srIdx].sentence);
+  const btn=document.getElementById('sr-speak-btn');
+  if(btn){btn.classList.add('speaking');btn.textContent='🔊 播放中...';}
+  speakEN(p.en,()=>{
+    if(btn){btn.classList.remove('speaking');btn.textContent='🔊 朗读例句';}
+    if(cb)cb();
+  });
+}
+function srNext(){srStop();const s=getSents();srIdx=(srIdx+1)%s.length;renderSentRead(s);if(srAutoActive)srSpeakSchedule();}
+function srPrev(){srStop();const s=getSents();srIdx=(srIdx-1+s.length)%s.length;renderSentRead(s);}
+function srSpeakSchedule(){srSpeak(()=>{if(!srAutoActive)return;const d=parseInt(document.getElementById('sr-interval')?.value||3500);srAutoTimer=setTimeout(()=>{if(!srAutoActive)return;const s=getSents();srIdx=(srIdx+1)%s.length;renderSentRead(s);srSpeakSchedule();},d);});}
+function srToggleAuto(){srAutoActive=document.getElementById('sr-auto')?.checked;if(srAutoActive)srSpeakSchedule();else srStop();}
+function srStop(){srAutoActive=false;const cb=document.getElementById('sr-auto');if(cb)cb.checked=false;clearTimeout(srAutoTimer);if(window.speechSynthesis)window.speechSynthesis.cancel();}
+
+// ─── WEAK WORDS ───
+function getWeakEntries(){
+  return lessons.flatMap(l=>(l.words||[])
+    .filter(w=>(w.weakCount||0)>0&&!w.mastered)
+    .map(w=>({lesson:l,word:w})));
+}
+function renderWeak(){
+  const c=document.getElementById('weak-content');
+  const entries=getWeakEntries();
+  if(!entries.length){
+    c.innerHTML='<div class="empty-state"><div class="emoji">🧠</div><p>薄弱词仓现在是空的。<br>听写错误或跟读标记“需复习”的单词会自动来到这里。</p></div>';
+    return;
+  }
+  c.innerHTML=`<div class="mini-grid">
+    <div class="metric-card"><div class="metric-num">${entries.length}</div><div class="metric-label">待攻克薄弱词</div></div>
+    <div class="metric-card"><div class="metric-num">${entries.reduce((s,e)=>s+(e.word.weakCount||0),0)}</div><div class="metric-label">累计暴露次数</div></div>
+  </div>
+  <div class="weak-list">${entries.map((e,i)=>`
+    <div class="weak-card">
+      <div>
+        <div class="weak-en">${escHtml(e.word.en)} <span class="sent-tag">${escHtml(e.lesson.name)}</span></div>
+        <div class="weak-meta">${escHtml(e.word.zh||'')} · ${escHtml(e.word.weakReason||'需复习')} · ${e.word.weakCount||1} 次</div>
+      </div>
+      <div class="weak-actions">
+        <button class="btn btn-outline btn-sm" onclick="weakSpeak(${i})">🔊 发音</button>
+        <button class="btn btn-green btn-sm" onclick="weakMaster(${i})">已攻克</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+function weakSpeak(i){const e=getWeakEntries()[i];if(e)speakEN(e.word.en);}
+function weakMaster(i){const e=getWeakEntries()[i];if(!e)return;clearWeak(e.word);save();renderWeak();renderLessons();}
+
+// ─── CLARA STORY ───
+function renderStory(){
+  const l=getActive();
+  const c=document.getElementById('story-content');
+  if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
+  const p=l.passage||null;
+  c.innerHTML=`<div class="generator-box">
+    <div class="generator-head"><h3>📖 词串成文</h3></div>
+    <div class="generator-tools">
+      <select id="story-style">
+        <option value="daily">日常小故事</option>
+        <option value="school">校园情境</option>
+        <option value="exam">阅读理解风格</option>
+      </select>
+      <div class="generator-buttons">
+        <button class="btn btn-primary btn-sm" onclick="generateStory()">生成短文</button>
+        <button class="btn btn-outline btn-sm" onclick="speakStory()">朗读短文</button>
+      </div>
+    </div>
+    <div class="generator-status" id="story-status">会尽量包含本课前 5-10 个单词；配置 AI 时效果更自然。</div>
+  </div>
+  <div id="story-box">${p?storyHtml(p):'<div class="empty-state"><div class="emoji">📖</div><p>点击“生成短文”，把今天的单词串成一篇可朗读的小语篇。</p></div>'}</div>`;
+}
+function storyHtml(p){
+  return `<div class="story-card">
+    <div class="story-en">${escHtml(p.en)}</div>
+    <div class="story-zh">${escHtml(p.zh||'')}</div>
+  </div>`;
+}
+async function generateStory(){
+  const l=getActive();if(!l)return;
+  const words=(l.words||[]).filter(w=>w.en).slice(0,10);
+  if(!words.length)return;
+  const cfg=getAiConfig();
+  const style=document.getElementById('story-style')?.value||'daily';
+  setStoryStatus('正在生成 Clara 小语篇...');
+  try{
+    l.passage=cfg.key?await generateStoryWithAi(words,cfg,style):generateStoryLocal(words,style);
+  }catch(e){
+    console.error(e);
+    l.passage=generateStoryLocal(words,style);
+    setStoryStatus('AI 暂时不可用，已使用本地语篇生成。',true);
+  }
+  save();
+  renderStory();
+}
+function setStoryStatus(text,isBad){const el=document.getElementById('story-status');if(el){el.textContent=text;el.style.color=isBad?'var(--red)':'var(--text-3)';}}
+async function generateStoryWithAi(words,cfg,style){
+  const styleText={daily:'a warm daily-life mini story',school:'a school scene mini story',exam:'an original reading-comprehension style paragraph'}[style]||'a mini story';
+  const payload={model:cfg.model,messages:[
+    {role:'system',content:'Create short English reading passages for Chinese English learners. Return only valid JSON. The passage must be a real scene or story, not a meta text about reviewing vocabulary.'},
+    {role:'user',content:`Write ${styleText} using all or most of these words naturally in context. Do not write sentences like "Clara reviewed these words" or "students used these words". Make the words do real work in the story. Keep it 70-100 English words. Include Chinese translation. Return JSON with keys en and zh. Words: ${JSON.stringify(words.map(w=>({en:w.en,zh:w.zh})))} `}
+  ],temperature:.75};
+  const res=await fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify(payload)});
+  if(!res.ok) throw new Error('AI story failed');
+  const data=await res.json();
+  const content=data.choices?.[0]?.message?.content||'';
+  return JSON.parse((content.match(/\{[\s\S]*\}/)||[content])[0]);
+}
+function generateStoryLocal(words,style){
+  const keys=words.map(w=>normalizeAnswer(w.en));
+  if(hasAny(keys,['planet','water','tap','save water','turn off','recycle','plastic','air','oxygen'])){
+    if(style==='exam'){
+      return {en:'Many families want to help the planet, but they do not know where to start. One easy way is to turn off the tap while brushing teeth. A short shower can save water, and recycling plastic bottles keeps streets and rivers cleaner. Trees are important too, because they clean the air and give us oxygen. Small actions may look simple, but together they can make a real difference.',zh:'许多家庭想帮助地球，却不知道从哪里开始。一个简单的方法是在刷牙时关掉水龙头。短时间淋浴可以节约用水，回收塑料瓶能让街道和河流更干净。树木也很重要，因为它们净化空气并为我们提供氧气。小行动看起来简单，但合在一起会产生真正的改变。'};
+    }
+    if(style==='school'){
+      return {en:'After science class, Mia noticed that the tap was still running. She turned it off and asked her friends to save water. On Friday, the class collected plastic bottles to recycle them. Their teacher said clean air, fresh water, and oxygen from trees are important for every living thing on the planet.',zh:'科学课后，Mia 注意到水龙头还开着。她把它关掉，并请朋友们节约用水。周五，全班收集塑料瓶进行回收。老师说，干净的空气、新鲜的水和树木释放的氧气，对地球上的每一种生物都很重要。'};
+    }
+    return {en:'In the morning, Leo had a quick shower and turned off the tap carefully. He wanted to save water because every drop matters. On his way to school, he picked up a plastic bottle and put it in the recycle bin. The air felt clean after the rain, and the trees around him seemed to look after the planet quietly.',zh:'早上，Leo 快速洗了个淋浴，并认真关掉水龙头。他想节约用水，因为每一滴水都很重要。上学路上，他捡起一个塑料瓶，把它放进回收箱。雨后的空气很清新，周围的树木仿佛在安静地守护这个星球。'};
+  }
+  if(style==='exam'){
+    return {en:'The bus stopped near a quiet street, and Anna looked after her little brother as they crossed the road. A sign was called “The Old Garden,” but the place looked new and clean. They sat under a light, drank some water, and listened to the wind in the trees. It was a simple afternoon, but it became an important memory.',zh:'公交车停在一条安静的街道旁，Anna 在过马路时照看着弟弟。一个牌子叫“老花园”，但这个地方看起来又新又干净。他们坐在一盏灯下，喝了些水，听树间的风声。这是一个简单的下午，却成了一段重要的回忆。'};
+  }
+  return {en:'Before dinner, Ben helped his grandmother in the kitchen. He turned on the light, washed some fruit with clean water, and kept the table tidy. His grandmother asked him to look after the soup for a minute. Outside, the evening air was cool, and the small house felt warm and safe.',zh:'晚饭前，Ben 在厨房帮奶奶。他打开灯，用干净的水洗水果，并保持桌面整洁。奶奶让他照看一会儿汤。屋外，傍晚的空气很凉爽，小屋里却温暖又安心。'};
+}
+function hasAny(list,items){return items.some(x=>list.includes(x));}
+function speakStory(){const l=getActive();if(l?.passage?.en)speakEN(l.passage.en);}
+
+// ─── MATCH GAME ───
+function renderGame(){
+  const l=getActive();
+  const c=document.getElementById('game-content');
+  if(!l||l.words.length<2){c.innerHTML='<div class="no-words">至少需要 2 个单词才能开始极速配</div>';return;}
+  c.innerHTML=`<div class="game-top">
+    <button class="btn btn-primary btn-sm" onclick="startGame()">开始闯关</button>
+    <span class="game-pill" id="game-score">得分 0</span>
+    <span class="game-pill" id="game-time">60 秒</span>
+  </div><div id="game-board" class="game-board"></div>`;
+  startGame();
+}
+function startGame(){
+  clearInterval(gameTimer);
+  const l=getActive();if(!l)return;
+  const pairs=shuffle((l.words||[]).filter(w=>w.en&&w.zh)).slice(0,8).map((w,i)=>({id:i,en:w.en,zh:w.zh,done:false}));
+  gameState={pairs,left:shuffle([...pairs]),right:shuffle([...pairs]),selected:null,score:0,time:60};
+  gameTimer=setInterval(()=>{if(!gameState)return;gameState.time--;updateGameTop();if(gameState.time<=0){clearInterval(gameTimer);}},1000);
+  renderGameBoard();
+}
+function renderGameBoard(){
+  const b=document.getElementById('game-board');if(!b||!gameState)return;
+  b.innerHTML=`<div class="match-grid">
+    <div class="match-col">${gameState.left.map(p=>matchCard(p,'en')).join('')}</div>
+    <div class="match-col">${gameState.right.map(p=>matchCard(p,'zh')).join('')}</div>
+  </div>`;
+  updateGameTop();
+}
+function matchCard(p,side){
+  const cls=p.done?' done':(gameState.selected?.side===side&&gameState.selected?.id===p.id?' selected':'');
+  return `<div class="match-card${cls}" onclick="matchPick(${p.id},'${side}')">${escHtml(side==='en'?p.en:p.zh)}</div>`;
+}
+function matchPick(id,side){
+  if(!gameState)return;
+  const p=gameState.pairs.find(x=>x.id===id);if(!p||p.done)return;
+  if(!gameState.selected){gameState.selected={id,side};renderGameBoard();return;}
+  if(gameState.selected.side===side){gameState.selected={id,side};renderGameBoard();return;}
+  if(gameState.selected.id===id){p.done=true;gameState.score+=10;speakEN(p.en);recordStudy('game',true,p);}
+  else{
+    gameState.score=Math.max(0,gameState.score-2);
+    const wrong=gameState.pairs.find(x=>x.id===gameState.selected.id);
+    if(wrong){markGameWeak(wrong,'极速配错配');}
+    markGameWeak(p,'极速配错配');
+  }
+  gameState.selected=null;
+  renderGameBoard();
+  if(gameState.pairs.every(x=>x.done)){clearInterval(gameTimer);document.getElementById('game-time').textContent='完成！';}
+}
+function updateGameTop(){
+  const s=document.getElementById('game-score');const t=document.getElementById('game-time');
+  if(s&&gameState)s.textContent=`得分 ${gameState.score}`;
+  if(t&&gameState)t.textContent=gameState.pairs.every(x=>x.done)?'完成！':`${gameState.time} 秒`;
+}
+function markGameWeak(pair,reason){
+  const l=getActive();if(!l||!pair)return;
+  const w=(l.words||[]).find(x=>normalizeAnswer(x.en)===normalizeAnswer(pair.en));
+  if(w){markWeak(w,reason);recordStudy('game',false,w);save();}
+}
+function shuffle(arr){return arr.map(x=>[Math.random(),x]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);}
+
+// ─── REPORT ───
+function renderReport(){
+  ensureToday();
+  const c=document.getElementById('report-content');
+  const dictTotal=studyStats.dictRight+studyStats.dictWrong;
+  const readTotal=studyStats.readGood+studyStats.readWeak;
+  const dictRate=dictTotal?Math.round(studyStats.dictRight/dictTotal*100):0;
+  const readRate=readTotal?Math.round(studyStats.readGood/readTotal*100):0;
+  const weakCount=getWeakEntries().length;
+  c.innerHTML=`<div class="mini-grid">
+    <div class="metric-card"><div class="metric-num">${Object.keys(studyStats.words||{}).length}</div><div class="metric-label">今日学习词数</div></div>
+    <div class="metric-card"><div class="metric-num">${dictRate}%</div><div class="metric-label">听写正确率</div></div>
+    <div class="metric-card"><div class="metric-num">${readRate}%</div><div class="metric-label">跟读掌握率</div></div>
+    <div class="metric-card"><div class="metric-num">${studyStats.streak||0}</div><div class="metric-label">连续打卡天数</div></div>
+    <div class="metric-card"><div class="metric-num">${weakCount}</div><div class="metric-label">薄弱词待复盘</div></div>
+  </div>
+  <div class="story-card">
+    <div class="story-en">今日建议</div>
+    <div class="story-zh">${weakCount?`先复盘 ${weakCount} 个薄弱词，再做一轮极速配。`:'今天状态不错，可以生成一篇 Clara 小语篇做语境阅读。'}</div>
+  </div>
+  <div class="generator-box" style="margin-top:14px">
+    <div class="generator-head"><h3>🗂 数据存档</h3></div>
+    <div class="generator-tools">
+      <div class="generator-status" id="archive-status">导出后可在另一台设备导入，恢复课时、薄弱词仓和学习战报。</div>
+      <div class="generator-buttons">
+        <button class="btn btn-primary btn-sm" onclick="exportArchive()">导出存档</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('archive-file').click()">导入存档</button>
+      </div>
+    </div>
+    <input id="archive-file" type="file" accept="application/json,.json" style="display:none" onchange="importArchive(this.files[0])">
+  </div>`;
+}
+function setArchiveStatus(text,isBad){
+  const el=document.getElementById('archive-status');
+  if(el){el.textContent=text;el.style.color=isBad?'var(--red)':'var(--text-3)';}
+}
+function exportArchive(){
+  const payload={
+    app:'Clara词研堂',
+    version:2,
+    exportedAt:new Date().toISOString(),
+    lessons,
+    activeLessonId,
+    studyStats,
+    settings:{
+      aiKey:localStorage.getItem('vocab_ai_key')||'',
+      aiEndpoint:localStorage.getItem('vocab_ai_endpoint')||'',
+      aiModel:localStorage.getItem('vocab_ai_model')||'',
+      aiLevel:localStorage.getItem('vocab_ai_level')||''
+    }
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`Clara词研堂-学习存档-${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  setArchiveStatus('存档已导出，请妥善保存这个 JSON 文件。');
+}
+function importArchive(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const data=JSON.parse(reader.result);
+      if(!Array.isArray(data.lessons)) throw new Error('bad archive');
+      if(!confirm('导入存档会覆盖当前本机数据，确定继续？')) return;
+      lessons=data.lessons;
+      activeLessonId=data.activeLessonId&&lessons.find(l=>l.id===data.activeLessonId)?data.activeLessonId:(lessons[0]?.id||null);
+      studyStats=data.studyStats||freshStats();
+      localStorage.setItem('vocab_lessons',JSON.stringify(lessons));
+      localStorage.setItem('vocab_stats',JSON.stringify(studyStats));
+      if(activeLessonId)localStorage.setItem('vocab_active',activeLessonId);else localStorage.removeItem('vocab_active');
+      if(data.settings){
+        localStorage.setItem('vocab_ai_key',data.settings.aiKey||'');
+        localStorage.setItem('vocab_ai_endpoint',data.settings.aiEndpoint||'');
+        localStorage.setItem('vocab_ai_model',data.settings.aiModel||'');
+        localStorage.setItem('vocab_ai_level',data.settings.aiLevel||'natural');
+      }
+      renderLessons();renderEditor();updateBadge();renderReport();
+      setArchiveStatus('存档导入成功，课时和薄弱词仓已恢复。');
+    }catch(e){
+      console.error(e);
+      setArchiveStatus('导入失败：请选择 Clara词研堂 导出的 JSON 存档。',true);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ─── PANEL SWITCH ───
+function showPanel(id) {
+  ['manage','browse','readword','listen','dictation','sentence','weak','story','game','report'].forEach(p=>{
+    document.getElementById('panel-'+p).classList.toggle('active',p===id);
+    document.getElementById('tab-'+p).classList.toggle('active',p===id);
+  });
+  rwStop(); srStop();
+  clearInterval(gameTimer);
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
+  playingIdx=-1;
+  if(id==='browse') renderBrowse();
+  if(id==='readword') renderReadWord();
+  if(id==='listen') renderListen();
+  if(id==='dictation') renderDictation();
+  if(id==='sentence') renderSentence();
+  if(id==='weak') renderWeak();
+  if(id==='story') renderStory();
+  if(id==='game') renderGame();
+  if(id==='report') renderReport();
+}
+
+// ─── UTILS ───
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escVal(s){return(s||'').replace(/"/g,'&quot;');}
+
+// ─── INIT ───
+load();
+renderLessons();
+renderEditor();
+updateBadge();
+document.getElementById('new-lesson-name').addEventListener('keydown',e=>{if(e.key==='Enter')addLesson();});
+</script>
+</body>
+</html>
