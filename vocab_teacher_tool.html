@@ -89,8 +89,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .import-box textarea:focus{border-color:var(--accent)}
 .import-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .import-status{font-size:12px;color:var(--text-3);line-height:1.6;margin-top:8px}
-.image-import-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
-.file-input{font-size:12px;color:var(--text-2);max-width:100%}
 .hint-text{font-size:12px;color:var(--text-3);line-height:1.6;margin-top:4px}
 
 /* ── BROWSE ── */
@@ -272,19 +270,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
     </div>
 
     <div id="import-box" class="import-box" style="display:none">
-      <p><b>智能批量导入</b>：可以粘贴一整段，也可以每行一个；系统会自动拆分英文和中文。逗号/Tab 格式仍然支持，第三列可写例句。</p>
-      <textarea id="import-text" placeholder="look after照顾；照料 planet星球 is called 叫做 live居住 air空气 oxygen氧气 water水 clean干净的 keep保持 important重要的 turn off关闭 turn on打开 tap水龙头 have a shower淋浴 save water节约用水 light灯 recycle 回收；循环利用 plastic塑料"></textarea>
+      <p><b>批量导入支持两种格式</b>：每个单词单独一行。不要把所有单词粘成一整段；如果资料格式杂乱，可以先让豆包、DeepSeek 等 AI 帮你整理成下面任一格式。</p>
+      <textarea id="import-text" placeholder="格式一：英文 + 中文
+look 看
+you 你
+we 我们
+
+格式二：分组标题 + 英文 + 音标 + 词性 + 中文（音标和词性会自动忽略）
+【学新前已认识】
+guitar  /ɡɪˈtɑː(r)/  n. 吉他
+run  /rʌn/  v. 跑
+【课堂新学】
+clean  /kliːn/  adj. 清洁/干净的；v. 清洁
+horse  /hɔːs/  n. 马
+exercise  /ˈeksəsaɪz/  n./v. 锻炼"></textarea>
       <div class="import-actions">
         <button class="btn btn-primary btn-sm" onclick="doImport()">智能识别并导入</button>
         <button class="btn btn-outline btn-sm" onclick="previewImport()">预览识别</button>
         <button class="btn btn-outline btn-sm" onclick="toggleImport()">取消</button>
       </div>
-      <div class="image-import-row">
-        <input class="file-input" id="import-image" type="file" accept="image/*" onchange="ocrImportImage(this.files[0])">
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-image').click()">上传图片识别</button>
-        <span class="hint-text">图片识别首次需要联网加载 OCR 引擎，识别后可在文本框里修改再导入。</span>
-      </div>
-      <div id="import-status" class="import-status">支持示例：look after照顾；照料 planet星球；也支持每行“look after 照顾；照料”。</div>
+      <div id="import-status" class="import-status">推荐先整理为“一行一个词”：英文 中文；或 英文 音标 词性 中文。分组标题如【课堂新学】会自动跳过。</div>
     </div>
 
     <div class="row-labels">
@@ -623,12 +628,13 @@ function isImportHeading(line){
 }
 function parseVocabListLine(line){
   const cleaned=line.replace(/\s+/g,' ').trim();
-  const pos='(?:n|v|vt|vi|adj|adv|prep|phr|pron|conj|num|art|det|interj|modal|aux)\\.';
-  let m=cleaned.match(new RegExp(`^([A-Za-z][A-Za-z'’.-]*(?:\\s+[A-Za-z][A-Za-z'’.-]*)*?)\\s+(?:/[^/]+/\\s*)?(?:${pos}\\s*)+(.+)$`,'i'));
+  const pos='(?:n|v|vt|vi|adj|adv|prep|phr|pron|conj|num|art|det|interj|modal|aux)';
+  const posBlock=`(?:${pos})\\.(?:/(?:${pos})\\.)?`;
+  let m=cleaned.match(new RegExp(`^([A-Za-z][A-Za-z'’.-]*(?:\\s+[A-Za-z][A-Za-z'’.-]*)*?)\\s+(?:/[^/]+/\\s*)?(?:(?:${posBlock})\\s*)+(.+)$`,'i'));
   if(!m) m=cleaned.match(/^([A-Za-z][A-Za-z'’.-]*(?:\s+[A-Za-z][A-Za-z'’.-]*)*?)\s+\/[^/]+\/\s+(.+)$/);
   if(!m) return null;
   const en=cleanEn(m[1]);
-  const zh=cleanZh(m[2].replace(new RegExp(`^(?:${pos}\\s*)+`,'i'),''));
+  const zh=cleanZh(m[2].replace(new RegExp(`^(?:(?:${posBlock})\\s*)+`,'i'),''));
   return en&&zh&&hasChinese(zh)?{en,zh,sentence:''}:null;
 }
 function parseTableLine(line){
@@ -661,7 +667,9 @@ function cleanEn(s){
 }
 function cleanZh(s){
   return (s||'')
-    .replace(/^[\s,，。；;:：]+|[\s,，。]+$/g,'')
+    .replace(/^[\s,，。；;:：.]+|[\s,，。]+$/g,'')
+    .replace(/[;；]\s*(?:n|v|vt|vi|adj|adv|prep|phr|pron|conj|num|art|det|interj|modal|aux)\.(?:\/(?:n|v|vt|vi|adj|adv|prep|phr|pron|conj|num|art|det|interj|modal|aux)\.)?\s*/gi,'；')
+    .replace(/^(?:n|v|vt|vi|adj|adv|prep|phr|pron|conj|num|art|det|interj|modal|aux)\.(?:\/(?:n|v|vt|vi|adj|adv|prep|phr|pron|conj|num|art|det|interj|modal|aux)\.)?\s*/i,'')
     .replace(/\s+/g,'')
     .trim();
 }
@@ -676,37 +684,6 @@ function dedupeImportRows(rows){
     return true;
   });
 }
-async function ocrImportImage(file){
-  if(!file) return;
-  const box=document.getElementById('import-text');
-  setImportStatus('正在加载图片识别引擎，首次使用可能需要几十秒...');
-  try{
-    await loadTesseract();
-    setImportStatus('正在识别图片文字...');
-    const result=await Tesseract.recognize(file,'eng+chi_sim',{logger:m=>{
-      if(m.status&&m.progress!=null) setImportStatus(`图片识别中：${m.status} ${Math.round(m.progress*100)}%`);
-    }});
-    const text=result?.data?.text?.trim()||'';
-    if(!text){setImportStatus('图片里没有识别到文字，可以换一张更清晰的图片。',true);return;}
-    box.value=(box.value.trim()?box.value.trim()+'\n':'')+text;
-    const parsed=parseImportText(box.value);
-    setImportStatus(`图片文字已放入文本框，当前可识别 ${parsed.length} 条。请检查后点击导入。`);
-  }catch(e){
-    console.error(e);
-    setImportStatus('图片识别失败。请确认网络可用，或先用手机/系统 OCR 把图片文字复制到文本框。',true);
-  }
-}
-function loadTesseract(){
-  if(window.Tesseract) return Promise.resolve();
-  return new Promise((resolve,reject)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    s.onload=resolve;
-    s.onerror=reject;
-    document.head.appendChild(s);
-  });
-}
-
 // ─── SPEECH ───
 function speak(text, lang, onEnd) {
   if (!window.speechSynthesis) { alert('浏览器不支持语音，请用 Chrome 或 Safari'); return; }
