@@ -85,6 +85,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .add-word-row{display:flex;gap:8px;margin-bottom:6px}
 .import-box{background:var(--bg);border:1px dashed var(--border-strong);border-radius:var(--radius);padding:14px;margin-bottom:16px}
 .import-box p{font-size:13px;color:var(--text-2);margin-bottom:8px}
+.import-examples{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+.import-example{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:10px}
+.import-example-title{font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px}
+.import-example pre{margin:0;white-space:pre-wrap;font-size:12px;line-height:1.55;color:var(--text-2);font-family:monospace}
 .import-box textarea{width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:monospace;height:90px;resize:vertical;outline:none;background:#fff}
 .import-box textarea:focus{border-color:var(--accent)}
 .import-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
@@ -213,6 +217,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
   .word-row input:nth-child(3){grid-column:1/-2}
   .row-labels{grid-template-columns:1fr 1fr}
   .row-labels .row-label:nth-child(3){grid-column:1/-2}
+  .import-examples{grid-template-columns:1fr}
   .read-en{font-size:28px}
   .read-card{padding:24px 20px}
   .top-nav{padding:0 12px}
@@ -270,20 +275,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
     </div>
 
     <div id="import-box" class="import-box" style="display:none">
-      <p><b>批量导入支持两种格式</b>：每个单词单独一行。不要把所有单词粘成一整段；如果资料格式杂乱，可以先让豆包、DeepSeek 等 AI 帮你整理成下面任一格式。</p>
-      <textarea id="import-text" placeholder="格式一：英文 + 中文
-look 看
+      <p><b>批量导入必须一词一行</b>：不要把所有单词粘成一整段。资料格式乱时，可以先让豆包、DeepSeek 等 AI 帮你整理成下面任一格式。</p>
+      <div class="import-examples">
+        <div class="import-example">
+          <div class="import-example-title">格式一：英文 + 中文</div>
+          <pre>look 看
 you 你
-we 我们
-
-格式二：分组标题 + 英文 + 音标 + 词性 + 中文（音标和词性会自动忽略）
-【学新前已认识】
+we 我们</pre>
+        </div>
+        <div class="import-example">
+          <div class="import-example-title">格式二：英文 + 音标 + 词性 + 中文</div>
+          <pre>【学新前已认识】
 guitar  /ɡɪˈtɑː(r)/  n. 吉他
 run  /rʌn/  v. 跑
 【课堂新学】
 clean  /kliːn/  adj. 清洁/干净的；v. 清洁
 horse  /hɔːs/  n. 马
-exercise  /ˈeksəsaɪz/  n./v. 锻炼"></textarea>
+exercise  /ˈeksəsaɪz/  n./v. 锻炼</pre>
+        </div>
+      </div>
+      <textarea id="import-text" placeholder="请在这里粘贴：一行一个单词，不要粘成一整段。"></textarea>
       <div class="import-actions">
         <button class="btn btn-primary btn-sm" onclick="doImport()">智能识别并导入</button>
         <button class="btn btn-outline btn-sm" onclick="previewImport()">预览识别</button>
