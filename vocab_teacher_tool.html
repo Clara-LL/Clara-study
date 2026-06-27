@@ -379,7 +379,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 const CLARA_SITE_AI = {
   enabled: true,
   provider: 'deepseek',
-  key: 'sk-a7bb10208c9d49da91231a1f3552b2b7',
+  key: 'sk-ws-H.RYPMPYP.Joum.MEUCIAgjJWX5RpBupfMwk888yd46cP1ej8KdF2ImydqxBXdkAiEAjhdUm4nGCd0DbWOHAnFMMPYUdlnDobjhNukuPZnVKn8',
   endpoint: 'https://api.deepseek.com/chat/completions',
   model: 'deepseek-chat',
   hideSettingsForStudents: true
@@ -1117,12 +1117,26 @@ async function generateWithAi(words,cfg){
     temperature:0.75
   };
   const res=await fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify(payload)});
-  if(!res.ok) throw new Error('AI request failed: '+res.status);
+  if(!res.ok) throw new Error(await explainAiHttpError(res,cfg));
   const data=await res.json();
   const content=data.choices?.[0]?.message?.content||data.output_text||'';
   const jsonText=(content.match(/\[[\s\S]*\]/)||[content])[0];
   const arr=JSON.parse(jsonText);
   return arr.map(x=>({en:x.en||'',sentence_en:x.sentence_en||x.sentence||'',sentence_zh:x.sentence_zh||x.zh||''})).filter(x=>x.en&&x.sentence_en);
+}
+async function explainAiHttpError(res,cfg){
+  let detail='';
+  try{detail=await res.text();}catch(e){detail='';}
+  const provider=aiProviderName(cfg.provider);
+  const short=detail?detail.slice(0,180).replace(/\s+/g,' '):'';
+  if(res.status===400) return `${provider} 返回 400：请求格式或模型名可能不对。请检查模型名 ${cfg.model}。${short}`;
+  if(res.status===401) return `${provider} 返回 401：API Key 无效、填错或已失效。`;
+  if(res.status===402) return `${provider} 返回 402：账户余额/额度不足，或这个 Key 没有可用计费额度。请去平台充值或更换可用 Key。`;
+  if(res.status===403) return `${provider} 返回 403：可能是域名白名单、权限或来源限制未通过。请确认白名单包含 https://clara-ll.github.io。`;
+  if(res.status===404) return `${provider} 返回 404：接口地址或模型名不存在。请检查 ${cfg.endpoint} 和 ${cfg.model}。`;
+  if(res.status===429) return `${provider} 返回 429：请求太频繁或额度限流，请稍后再试。`;
+  if(res.status>=500) return `${provider} 返回 ${res.status}：平台服务暂时异常。${short}`;
+  return `${provider} 返回 ${res.status}：${short||'接口请求失败'}`;
 }
 function generateWithTemplates(words,level){
   return words.map((w,i)=>{
@@ -1417,7 +1431,7 @@ async function generateStoryWithAi(words,cfg,style){
     {role:'user',content:`Write ${styleText} using all or most of these words naturally in context. Do not write sentences like "Clara reviewed these words" or "students used these words". Make the words do real work in the story. Keep it 70-100 English words. Include Chinese translation. Return JSON with keys en and zh. Words: ${JSON.stringify(words.map(w=>({en:w.en,zh:w.zh})))} `}
   ],temperature:.75};
   const res=await fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify(payload)});
-  if(!res.ok) throw new Error('AI story failed');
+  if(!res.ok) throw new Error(await explainAiHttpError(res,cfg));
   const data=await res.json();
   const content=data.choices?.[0]?.message?.content||'';
   return JSON.parse((content.match(/\{[\s\S]*\}/)||[content])[0]);
