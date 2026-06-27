@@ -376,13 +376,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 // 请把下面 key 改成你的平台密钥，并在平台后台把域名白名单设置为：
 // https://clara-ll.github.io
 // 注意：静态网页没有真正后端，Key 写在前端代码里仍可能被看到；请只使用有限额度/可随时停用的教学专用 Key。
+// ★ 老师配置区 ★
+// 把下面 key 换成你在 arityflow.top 控制台新生成的 Key
+// model 填平台里实际可用的模型名（在控制台"模型"页查看）
+// 改完保存，学生家长打开网页无需任何操作即可使用 AI 功能
 const CLARA_SITE_AI = {
   enabled: true,
-  provider: 'deepseek',
-  key: 'sk-ws-H.RYPMPYP.Joum.MEUCIAgjJWX5RpBupfMwk888yd46cP1ej8KdF2ImydqxBXdkAiEAjhdUm4nGCd0DbWOHAnFMMPYUdlnDobjhNukuPZnVKn8',
-  endpoint: 'https://api.deepseek.com/chat/completions',
-  model: 'deepseek-chat',
-  hideSettingsForStudents: true
+  provider: 'custom',
+  key: 'sk-ws-H.RYPDHLH.7Zy1.MEUCIQC6plzvcIyU4AX8OnGeqBsAqoM8HBnvrZL0-ZuIKLlZRAIgHgD6fLzNfd3lv4Eb5fzbjHLFrdVG56uJcN2dI0zpl4g',
+  endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+  model: 'qwen-turbo',
+  hideSettingsForStudents: true   // 设为 true：学生看不到 AI 设置和 Key
 };
 let lessons = [];
 let activeLessonId = null;
@@ -985,18 +989,26 @@ function renderSentenceGenerator(){
       <summary>AI 设置</summary>
       <div class="generator-grid">
         <select id="ai-provider" onchange="applyAiProvider(this.value)">
-          <option value="custom" ${cfg.provider==='custom'?'selected':''}>自定义接口</option>
-          <option value="deepseek" ${cfg.provider==='deepseek'?'selected':''}>DeepSeek</option>
+          <option value="zhipu" ${cfg.provider==='zhipu'?'selected':''}>✅ 智谱AI GLM-4-Flash（免费，推荐）</option>
+          <option value="groq" ${cfg.provider==='groq'?'selected':''}>✅ Groq Llama 3.3（免费）</option>
+          <option value="anthropic" ${cfg.provider==='anthropic'?'selected':''}>Anthropic Claude Haiku</option>
+          <option value="deepseek" ${cfg.provider==='deepseek'?'selected':''}>DeepSeek（需充值）</option>
           <option value="siliconflow" ${cfg.provider==='siliconflow'?'selected':''}>硅基流动 SiliconFlow</option>
-          <option value="zhipu" ${cfg.provider==='zhipu'?'selected':''}>智谱 AI</option>
+          <option value="openai" ${cfg.provider==='openai'?'selected':''}>OpenAI</option>
+          <option value="custom" ${cfg.provider==='custom'?'selected':''}>自定义接口</option>
         </select>
         <input type="password" id="ai-key" placeholder="API Key（留空使用本地例句库）" value="${escVal(cfg.key)}">
         <input type="text" id="ai-endpoint" placeholder="接口地址" value="${escVal(cfg.endpoint)}">
         <input type="text" id="ai-model" placeholder="模型名" value="${escVal(cfg.model)}">
-        <button class="btn btn-outline btn-sm" onclick="testAiConnection()">测试 AI</button>
+        <div style="font-size:11px;color:var(--text-3);line-height:1.6;grid-column:1/-1">
+          💡 <b>当前配置：</b> arityflow.top 聚合平台（接口地址已预填）。
+          去 <a href="https://www.arityflow.top/console/token" target="_blank" style="color:var(--accent)">arityflow.top 控制台</a> 生成/查看 Key，在上方填入即可。
+          模型名从控制台"可用模型"里复制，常用：<b>gpt-4o-mini</b>、<b>deepseek-chat</b>、<b>claude-3-5-haiku</b> 等
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="testAiConnection()">🔌 测试连接</button>
       </div>
     </details>`:''}
-    <div class="generator-status" id="generator-status">${cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}${hasSiteAi()?'（站点内置）':''}`:'当前未配置 API Key，将使用本地通用生成。'}</div>
+    <div class="generator-status" id="generator-status">${cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}${hasSiteAi()?'（站点内置）':''}`:'当前未配置 API Key，将使用本地例句库。点击 AI 设置 → 选择免费的智谱AI或Groq，填入Key即可。'}</div>
   </div>`;
 }
 function hasSiteAi(){
@@ -1016,8 +1028,8 @@ function getAiConfig(){
   return {
     provider:localStorage.getItem('vocab_ai_provider')||'custom',
     key:localStorage.getItem('vocab_ai_key')||'',
-    endpoint:localStorage.getItem('vocab_ai_endpoint')||'https://api.openai.com/v1/chat/completions',
-    model:localStorage.getItem('vocab_ai_model')||'gpt-4.1-mini',
+    endpoint:localStorage.getItem('vocab_ai_endpoint')||'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    model:localStorage.getItem('vocab_ai_model')||'qwen-turbo',
     level:localStorage.getItem('vocab_ai_level')||'natural'
   };
 }
@@ -1048,9 +1060,12 @@ function readAiConfig(){
 }
 function getProviderPreset(provider){
   return {
+    zhipu:{endpoint:'https://open.bigmodel.cn/api/paas/v4/chat/completions',model:'glm-4-flash'},
+    groq:{endpoint:'https://api.groq.com/openai/v1/chat/completions',model:'llama-3.3-70b-versatile'},
     deepseek:{endpoint:'https://api.deepseek.com/chat/completions',model:'deepseek-chat'},
     siliconflow:{endpoint:'https://api.siliconflow.cn/v1/chat/completions',model:'deepseek-ai/DeepSeek-V3'},
-    zhipu:{endpoint:'https://open.bigmodel.cn/api/paas/v4/chat/completions',model:'glm-4-flash'}
+    anthropic:{endpoint:'https://api.anthropic.com/v1/messages',model:'claude-haiku-4-5-20251001'},
+    openai:{endpoint:'https://api.openai.com/v1/chat/completions',model:'gpt-4o-mini'}
   }[provider]||null;
 }
 function applyAiProvider(provider){
@@ -1062,7 +1077,7 @@ function applyAiProvider(provider){
   if(model) model.value=preset.model;
 }
 function aiProviderName(provider){
-  return {custom:'自定义接口',deepseek:'DeepSeek',siliconflow:'硅基流动',zhipu:'智谱 AI'}[provider]||'AI';
+  return {custom:'自定义接口',deepseek:'DeepSeek',siliconflow:'硅基流动',zhipu:'智谱AI(免费)',groq:'Groq(免费)',anthropic:'Anthropic Claude',openai:'OpenAI'}[provider]||'AI';
 }
 async function testAiConnection(){
   const cfg=readAiConfig();
@@ -1102,6 +1117,42 @@ async function generateSentences(mode){
     setGenStatus(`AI 调用失败，已改用本地通用生成。失败原因：${e.message||'接口请求失败'}`,true);
   }
 }
+async function callAiEndpoint(cfg,payload){
+  // Anthropic uses a different request format than OpenAI-compatible APIs
+  if(cfg.provider==='anthropic'){
+    // Convert OpenAI-style messages to Anthropic format
+    const systemMsg=payload.messages.find(m=>m.role==='system');
+    const userMsgs=payload.messages.filter(m=>m.role!=='system');
+    const anthropicPayload={
+      model:cfg.model,
+      max_tokens:1024,
+      system:systemMsg?systemMsg.content:undefined,
+      messages:userMsgs
+    };
+    return fetch(cfg.endpoint,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':cfg.key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify(anthropicPayload)
+    });
+  }
+  // OpenAI-compatible (DeepSeek, ZhiPu, Groq, SiliconFlow, etc.)
+  return fetch(cfg.endpoint,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+    body:JSON.stringify(payload)
+  });
+}
+function extractAiContent(data,provider){
+  if(provider==='anthropic'){
+    return data.content?.[0]?.text||'';
+  }
+  return data.choices?.[0]?.message?.content||data.output_text||'';
+}
 async function generateWithAi(words,cfg){
   const styleText={
     natural:'natural daily-life usage. The sentence must show how the word or phrase is actually used in a realistic situation',
@@ -1116,10 +1167,10 @@ async function generateWithAi(words,cfg){
     ],
     temperature:0.75
   };
-  const res=await fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify(payload)});
+  const res=await callAiEndpoint(cfg,payload);
   if(!res.ok) throw new Error(await explainAiHttpError(res,cfg));
   const data=await res.json();
-  const content=data.choices?.[0]?.message?.content||data.output_text||'';
+  const content=extractAiContent(data,cfg.provider);
   const jsonText=(content.match(/\[[\s\S]*\]/)||[content])[0];
   const arr=JSON.parse(jsonText);
   return arr.map(x=>({en:x.en||'',sentence_en:x.sentence_en||x.sentence||'',sentence_zh:x.sentence_zh||x.zh||''})).filter(x=>x.en&&x.sentence_en);
@@ -1407,7 +1458,7 @@ async function generateStory(){
   if(!words.length)return;
   const cfg=getAiConfig();
   const style=document.getElementById('story-style')?.value||'daily';
-  setStoryStatus(cfg.key?`正在调用 ${aiProviderName(cfg.provider)} (${cfg.model}) 生成短文...`:'未配置 API Key，正在使用本地通用短文生成...');
+  setStoryStatus(cfg.key?`正在调用 ${aiProviderName(cfg.provider)} (${cfg.model}) 生成短文...`:'未配置 AI Key，使用本地短文模板（在 AI 设置 中配置 Key 可获得更自然的短文）');
   let statusText='';
   let statusBad=false;
   try{
@@ -1430,10 +1481,10 @@ async function generateStoryWithAi(words,cfg,style){
     {role:'system',content:'Create short English reading passages for Chinese English learners. Return only valid JSON. The passage must be a real scene or story, not a meta text about reviewing vocabulary.'},
     {role:'user',content:`Write ${styleText} using all or most of these words naturally in context. Do not write sentences like "Clara reviewed these words" or "students used these words". Make the words do real work in the story. Keep it 70-100 English words. Include Chinese translation. Return JSON with keys en and zh. Words: ${JSON.stringify(words.map(w=>({en:w.en,zh:w.zh})))} `}
   ],temperature:.75};
-  const res=await fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify(payload)});
+  const res=await callAiEndpoint(cfg,payload);
   if(!res.ok) throw new Error(await explainAiHttpError(res,cfg));
   const data=await res.json();
-  const content=data.choices?.[0]?.message?.content||'';
+  const content=extractAiContent(data,cfg.provider);
   return JSON.parse((content.match(/\{[\s\S]*\}/)||[content])[0]);
 }
 function generateStoryLocal(words,style){
