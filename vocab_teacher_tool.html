@@ -372,6 +372,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 
 <script>
 // ─── DATA ───
+// 发布到 GitHub Pages 后，如果希望学生/家长无需填写 API Key，
+// 请把下面 key 改成你的平台密钥，并在平台后台把域名白名单设置为：
+// https://clara-ll.github.io
+// 注意：静态网页没有真正后端，Key 写在前端代码里仍可能被看到；请只使用有限额度/可随时停用的教学专用 Key。
+const CLARA_SITE_AI = {
+  enabled: true,
+  provider: 'deepseek',
+  key: 'sk-a7bb10208c9d49da91231a1f3552b2b7',
+  endpoint: 'https://api.deepseek.com/chat/completions',
+  model: 'deepseek-chat',
+  hideSettingsForStudents: true
+};
 let lessons = [];
 let activeLessonId = null;
 let playingIdx = -1;
@@ -953,6 +965,7 @@ function renderSentence(){
 }
 function renderSentenceGenerator(){
   const cfg=getAiConfig();
+  const showSettings=!hasSiteAi()||!CLARA_SITE_AI.hideSettingsForStudents||new URLSearchParams(location.search).get('teacher')==='1';
   return `<div class="generator-box">
     <div class="generator-head">
       <h3>✨ 自动生成相关句子</h3>
@@ -968,7 +981,7 @@ function renderSentenceGenerator(){
         <button class="btn btn-outline btn-sm" onclick="generateSentences('all')">全部重生成</button>
       </div>
     </div>
-    <details class="generator-settings">
+    ${showSettings?`<details class="generator-settings">
       <summary>AI 设置</summary>
       <div class="generator-grid">
         <select id="ai-provider" onchange="applyAiProvider(this.value)">
@@ -982,11 +995,24 @@ function renderSentenceGenerator(){
         <input type="text" id="ai-model" placeholder="模型名" value="${escVal(cfg.model)}">
         <button class="btn btn-outline btn-sm" onclick="testAiConnection()">测试 AI</button>
       </div>
-    </details>
-    <div class="generator-status" id="generator-status">${cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}`:'当前未配置 API Key，将使用本地通用生成。'}</div>
+    </details>`:''}
+    <div class="generator-status" id="generator-status">${cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}${hasSiteAi()?'（站点内置）':''}`:'当前未配置 API Key，将使用本地通用生成。'}</div>
   </div>`;
 }
+function hasSiteAi(){
+  return !!(CLARA_SITE_AI&&CLARA_SITE_AI.enabled&&CLARA_SITE_AI.key);
+}
 function getAiConfig(){
+  if(hasSiteAi()){
+    return {
+      provider:CLARA_SITE_AI.provider||'custom',
+      key:CLARA_SITE_AI.key,
+      endpoint:CLARA_SITE_AI.endpoint,
+      model:CLARA_SITE_AI.model,
+      level:localStorage.getItem('vocab_ai_level')||'natural',
+      siteManaged:true
+    };
+  }
   return {
     provider:localStorage.getItem('vocab_ai_provider')||'custom',
     key:localStorage.getItem('vocab_ai_key')||'',
@@ -996,6 +1022,16 @@ function getAiConfig(){
   };
 }
 function readAiConfig(){
+  if(hasSiteAi()){
+    return {
+      provider:CLARA_SITE_AI.provider||'custom',
+      key:CLARA_SITE_AI.key,
+      endpoint:CLARA_SITE_AI.endpoint,
+      model:CLARA_SITE_AI.model,
+      level:document.getElementById('ai-level')?.value||localStorage.getItem('vocab_ai_level')||'natural',
+      siteManaged:true
+    };
+  }
   const cfg={
     provider:document.getElementById('ai-provider')?.value||'custom',
     key:document.getElementById('ai-key')?.value.trim()||'',
@@ -1528,7 +1564,7 @@ function exportArchive(){
     activeLessonId,
     studyStats,
     settings:{
-      aiKey:localStorage.getItem('vocab_ai_key')||'',
+      aiKey:hasSiteAi()?'':(localStorage.getItem('vocab_ai_key')||''),
       aiEndpoint:localStorage.getItem('vocab_ai_endpoint')||'',
       aiModel:localStorage.getItem('vocab_ai_model')||'',
       aiLevel:localStorage.getItem('vocab_ai_level')||''
