@@ -155,8 +155,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .generator-settings{margin-top:10px;border-top:1px solid var(--border);padding-top:9px}
 .generator-settings summary{font-size:12px;color:var(--text-3);cursor:pointer;user-select:none;width:max-content}
 .generator-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
-.generator-grid input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;background:#fff;outline:none}
-.generator-grid input:focus{border-color:var(--accent)}
+.generator-grid input,.generator-grid select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;background:#fff;outline:none}
+.generator-grid input:focus,.generator-grid select:focus{border-color:var(--accent)}
 .generator-status{font-size:12px;color:var(--text-3);line-height:1.6}
 .sentence-list{display:flex;flex-direction:column;gap:10px}
 .sent-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;transition:border-color .12s,background .12s}
@@ -587,12 +587,28 @@ function parseImportText(text){
     .replace(/[‘’]/g,"'");
   const rows=[];
   normalized.split('\n').map(x=>x.trim()).filter(Boolean).forEach(line=>{
+    if(isImportHeading(line)) return;
+    const vocab=parseVocabListLine(line);
+    if(vocab){rows.push(vocab);return;}
     const table=parseTableLine(line);
     if(table.length){rows.push(...table);return;}
     rows.push(...parseMixedLine(line));
   });
   if(!rows.length) rows.push(...parseMixedLine(normalized.replace(/\n+/g,' ')));
   return dedupeImportRows(rows).filter(w=>w.en&&w.zh);
+}
+function isImportHeading(line){
+  return /^【[^】]+】$/.test(line)||/^\[[^\]]+\]$/.test(line)||/^[-—_=]{2,}$/.test(line);
+}
+function parseVocabListLine(line){
+  const cleaned=line.replace(/\s+/g,' ').trim();
+  const pos='(?:n|v|vt|vi|adj|adv|prep|phr|pron|conj|num|art|det|interj|modal|aux)\\.';
+  let m=cleaned.match(new RegExp(`^([A-Za-z][A-Za-z'’.-]*(?:\\s+[A-Za-z][A-Za-z'’.-]*)*?)\\s+(?:/[^/]+/\\s*)?(?:${pos}\\s*)+(.+)$`,'i'));
+  if(!m) m=cleaned.match(/^([A-Za-z][A-Za-z'’.-]*(?:\s+[A-Za-z][A-Za-z'’.-]*)*?)\s+\/[^/]+\/\s+(.+)$/);
+  if(!m) return null;
+  const en=cleanEn(m[1]);
+  const zh=cleanZh(m[2].replace(new RegExp(`^(?:${pos}\\s*)+`,'i'),''));
+  return en&&zh&&hasChinese(zh)?{en,zh,sentence:''}:null;
 }
 function parseTableLine(line){
   const parts=line.split(/\t|,/).map(x=>x.trim()).filter(Boolean);
@@ -607,7 +623,7 @@ function parseMixedLine(line){
     .replace(/\s+/g,' ')
     .trim();
   const rows=[];
-  const re=/([A-Za-z][A-Za-z'’.\-]*(?:\s+[A-Za-z][A-Za-z'’.\-]*)*)\s*([\u3400-\u9fff][\u3400-\u9fff；;、，,（）()《》〈〉\s]*)/g;
+  const re=/([A-Za-z][A-Za-z'’.\-]*(?:\s+[A-Za-z][A-Za-z'’.\-]*)*)\s*([\u3400-\u9fff][\u3400-\u9fff；;、，,（）()《》〈〉…\s]*)/g;
   let m;
   while((m=re.exec(compact))){
     const en=cleanEn(m[1]);
@@ -955,16 +971,24 @@ function renderSentenceGenerator(){
     <details class="generator-settings">
       <summary>AI 设置</summary>
       <div class="generator-grid">
+        <select id="ai-provider" onchange="applyAiProvider(this.value)">
+          <option value="custom" ${cfg.provider==='custom'?'selected':''}>自定义接口</option>
+          <option value="deepseek" ${cfg.provider==='deepseek'?'selected':''}>DeepSeek</option>
+          <option value="siliconflow" ${cfg.provider==='siliconflow'?'selected':''}>硅基流动 SiliconFlow</option>
+          <option value="zhipu" ${cfg.provider==='zhipu'?'selected':''}>智谱 AI</option>
+        </select>
         <input type="password" id="ai-key" placeholder="API Key（留空使用本地例句库）" value="${escVal(cfg.key)}">
         <input type="text" id="ai-endpoint" placeholder="接口地址" value="${escVal(cfg.endpoint)}">
         <input type="text" id="ai-model" placeholder="模型名" value="${escVal(cfg.model)}">
+        <button class="btn btn-outline btn-sm" onclick="testAiConnection()">测试 AI</button>
       </div>
     </details>
-    <div class="generator-status" id="generator-status">选择句子风格后生成；未配置 AI 时使用本地精选例句库。</div>
+    <div class="generator-status" id="generator-status">${cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}`:'当前未配置 API Key，将使用本地通用生成。'}</div>
   </div>`;
 }
 function getAiConfig(){
   return {
+    provider:localStorage.getItem('vocab_ai_provider')||'custom',
     key:localStorage.getItem('vocab_ai_key')||'',
     endpoint:localStorage.getItem('vocab_ai_endpoint')||'https://api.openai.com/v1/chat/completions',
     model:localStorage.getItem('vocab_ai_model')||'gpt-4.1-mini',
@@ -973,16 +997,47 @@ function getAiConfig(){
 }
 function readAiConfig(){
   const cfg={
+    provider:document.getElementById('ai-provider')?.value||'custom',
     key:document.getElementById('ai-key')?.value.trim()||'',
     endpoint:document.getElementById('ai-endpoint')?.value.trim()||'https://api.openai.com/v1/chat/completions',
     model:document.getElementById('ai-model')?.value.trim()||'gpt-4.1-mini',
     level:document.getElementById('ai-level')?.value||'natural'
   };
+  localStorage.setItem('vocab_ai_provider',cfg.provider);
   localStorage.setItem('vocab_ai_key',cfg.key);
   localStorage.setItem('vocab_ai_endpoint',cfg.endpoint);
   localStorage.setItem('vocab_ai_model',cfg.model);
   localStorage.setItem('vocab_ai_level',cfg.level);
   return cfg;
+}
+function getProviderPreset(provider){
+  return {
+    deepseek:{endpoint:'https://api.deepseek.com/chat/completions',model:'deepseek-chat'},
+    siliconflow:{endpoint:'https://api.siliconflow.cn/v1/chat/completions',model:'deepseek-ai/DeepSeek-V3'},
+    zhipu:{endpoint:'https://open.bigmodel.cn/api/paas/v4/chat/completions',model:'glm-4-flash'}
+  }[provider]||null;
+}
+function applyAiProvider(provider){
+  const preset=getProviderPreset(provider);
+  if(!preset) return;
+  const endpoint=document.getElementById('ai-endpoint');
+  const model=document.getElementById('ai-model');
+  if(endpoint) endpoint.value=preset.endpoint;
+  if(model) model.value=preset.model;
+}
+function aiProviderName(provider){
+  return {custom:'自定义接口',deepseek:'DeepSeek',siliconflow:'硅基流动',zhipu:'智谱 AI'}[provider]||'AI';
+}
+async function testAiConnection(){
+  const cfg=readAiConfig();
+  if(!cfg.key){setGenStatus('还没有填写 API Key，所以不会调用 AI。',true);return;}
+  setGenStatus(`正在测试 ${aiProviderName(cfg.provider)} (${cfg.model})...`);
+  try{
+    await generateWithAi([{en:'apple',zh:'苹果'}],cfg);
+    setGenStatus(`AI 连接成功：${aiProviderName(cfg.provider)} (${cfg.model})`);
+  }catch(e){
+    setGenStatus(`AI 连接失败：${e.message||'请检查 Key、接口地址、模型名或域名白名单'}`,true);
+  }
 }
 function setGenStatus(text,isBad){
   const el=document.getElementById('generator-status');
@@ -993,14 +1048,14 @@ async function generateSentences(mode){
   const cfg=readAiConfig();
   const targets=(l.words||[]).filter(w=>w.en&&(mode==='all'||!w.sentence));
   if(!targets.length){setGenStatus('当前没有需要生成的单词。');return;}
-  setGenStatus(`正在为 ${targets.length} 个单词生成句子...`);
+  setGenStatus(cfg.key?`正在调用 ${aiProviderName(cfg.provider)} (${cfg.model}) 生成 ${targets.length} 条句子...`:`未配置 API Key，正在用本地通用生成 ${targets.length} 条句子...`);
   try{
     const generated=cfg.key?await generateWithAi(targets,cfg):generateWithTemplates(targets,cfg.level);
     applyGeneratedSentences(l,generated,mode);
     save();
     renderEditor();
     renderSentence();
-    setGenStatus(`已生成并保存 ${generated.length} 条句子。点击下方句子可播放发音。`);
+    setGenStatus(`已生成并保存 ${generated.length} 条句子。${cfg.key?`来源：${aiProviderName(cfg.provider)}`:'来源：本地通用生成，质量不如 AI。'}`);
   }catch(e){
     console.error(e);
     const generated=generateWithTemplates(targets,cfg.level);
@@ -1008,7 +1063,7 @@ async function generateSentences(mode){
     save();
     renderEditor();
     renderSentence();
-    setGenStatus('AI 接口暂时不可用，已改用本地模板生成并保存。',true);
+    setGenStatus(`AI 调用失败，已改用本地通用生成。失败原因：${e.message||'接口请求失败'}`,true);
   }
 }
 async function generateWithAi(words,cfg){
@@ -1037,9 +1092,40 @@ function generateWithTemplates(words,level){
   return words.map((w,i)=>{
     const hit=getKnownSentence(w.en,level);
     if(hit) return {en:w.en,...hit};
-    const pool=getTemplatePool(level,w);
-    return {en:w.en,...pool[i%pool.length](w)};
+    return {en:w.en,...generateFallbackSentence(w,level,i)};
   });
+}
+function generateFallbackSentence(w,level,i){
+  const en=(w.en||'').trim();
+  const zh=(w.zh||en).trim();
+  const type=inferWordType(en,zh);
+  if(/familiar with/i.test(en)) return {sentence_en:'Are you familiar with this place?',sentence_zh:'你熟悉这个地方吗？'};
+  if(/talent/i.test(en)) return {sentence_en:'She has a real talent for music.',sentence_zh:'她很有音乐天赋。'};
+  if(/madam/i.test(en)) return {sentence_en:'Good morning, madam. How can I help you?',sentence_zh:'早上好，女士。有什么可以帮您？'};
+  if(/advertisement/i.test(en)) return {sentence_en:'I saw an advertisement for a new phone.',sentence_zh:'我看到了一则新手机广告。'};
+  if(level==='spoken'){
+    if(type==='verb') return {sentence_en:`Can you ${en} it for me?`,sentence_zh:`你能帮我${zh}吗？`};
+    if(type==='adj') return {sentence_en:`It looks ${en} to me.`,sentence_zh:`我觉得它看起来很${zh}。`};
+    return {sentence_en:`Look, there is ${nounPhrase(en)} over there.`,sentence_zh:`看，那边有${zh}。`};
+  }
+  if(level==='exam'){
+    if(type==='verb') return {sentence_en:`Children can learn to ${en} in a simple daily situation.`,sentence_zh:`孩子们可以在简单的日常情境中学习${zh}。`};
+    if(type==='adj') return {sentence_en:`The story shows why being ${en} can be helpful.`,sentence_zh:`这个故事说明了为什么${zh}会有帮助。`};
+    return {sentence_en:`The children noticed ${nounPhrase(en)} during the activity.`,sentence_zh:`孩子们在活动中注意到了${zh}。`};
+  }
+  if(type==='verb') return {sentence_en:`I try to ${en} at the right time.`,sentence_zh:`我尽量在合适的时候${zh}。`};
+  if(type==='adj') return {sentence_en:`The room feels ${en} after we clean it.`,sentence_zh:`打扫后，房间感觉很${zh}。`};
+  return {sentence_en:`I saw ${nounPhrase(en)} in the room.`,sentence_zh:`我在房间里看到了${zh}。`};
+}
+function inferWordType(en,zh){
+  if(/的$/.test(zh)) return 'adj';
+  if(/捡|指|寻找|找|隐藏|藏|弹跳|打开|关闭|保持|照顾|居住|节约|回收|循环|叫做|看|听|写|读|说|做|拿|放|穿|戴/.test(zh)) return 'verb';
+  if(/\b(up|off|on|after)\b/i.test(en)&&/\s/.test(en)) return 'verb';
+  return 'noun';
+}
+function nounPhrase(en){
+  if(/s$/i.test(en)||/\s/.test(en)&&/(clothes|trousers|sunglasses)$/i.test(en)) return en;
+  return `${articleFor(en)} ${en}`;
 }
 function getKnownSentence(en,level){
   const key=normalizeAnswer(en);
@@ -1061,7 +1147,34 @@ function getKnownSentence(en,level){
     'save water':['Take shorter showers to save water.','缩短淋浴时间来节约用水。'],
     'light':['There is a light on in the kitchen.','厨房里有一盏灯亮着。'],
     'recycle':['We recycle plastic bottles at school.','我们在学校回收塑料瓶。'],
-    'plastic':['Try not to use plastic bags every day.','尽量不要每天使用塑料袋。']
+    'plastic':['Try not to use plastic bags every day.','尽量不要每天使用塑料袋。'],
+    'between':['The ball rolled between the two chairs.','球滚到了两把椅子之间。'],
+    'phone':['I left my phone on the kitchen table.','我把电话放在了厨房桌上。'],
+    'clothes':['Put your clean clothes in the drawer.','把你的干净衣服放进抽屉里。'],
+    'crumbs':['There were crumbs all over the table.','桌子上到处都是面包屑。'],
+    'plane':['The plane flew over the beach.','飞机从海滩上空飞过。'],
+    'present':['She opened her birthday present after dinner.','晚饭后她打开了生日礼物。'],
+    'balloon':['The red balloon went up into the sky.','红色气球升上了天空。'],
+    'helicopter':['A helicopter landed near the hospital.','一架直升机降落在医院附近。'],
+    'teddy':['The child slept with his teddy bear.','那个孩子抱着泰迪熊睡觉。'],
+    'circle':['Draw a circle around the right answer.','把正确答案圈起来。'],
+    'square':['The children sat on a square mat.','孩子们坐在一张正方形垫子上。'],
+    'twins':['The twins often wear the same clothes.','这对双胞胎经常穿一样的衣服。'],
+    'bounce':['The ball can bounce very high.','这个球能弹得很高。'],
+    'mat':['Please wipe your shoes on the mat.','请在垫子上擦一擦鞋。'],
+    'pick up':['Can you pick up the crumbs from the floor?','你能把地上的面包屑捡起来吗？'],
+    'point':['Please point to the picture you like.','请指向你喜欢的图片。'],
+    'pineapple':['We ate fresh pineapple on the beach.','我们在海滩上吃了新鲜菠萝。'],
+    'hide':['The children like to hide behind the sofa.','孩子们喜欢藏在沙发后面。'],
+    'seek':['In the game, one child hides and the others seek.','游戏里，一个孩子藏起来，其他人去找。'],
+    'beach':['We built a sandcastle on the beach.','我们在海滩上堆了一个沙堡。'],
+    'holiday':['They took many photos during the holiday.','他们假期里拍了很多照片。'],
+    'postcard':['Grandma sent us a postcard from London.','奶奶从伦敦给我们寄来一张明信片。'],
+    'photo album':['The old photo album is full of family memories.','那本旧相册里装满了家庭回忆。'],
+    'baseball cap':['He wore a baseball cap in the sun.','他在太阳下戴着一顶棒球帽。'],
+    'trousers':['My trousers got wet in the rain.','我的裤子被雨淋湿了。'],
+    'hat':['She put on a hat before going outside.','她出门前戴上了帽子。'],
+    'sunglasses':['You should wear sunglasses on a bright day.','阳光强的时候你应该戴太阳镜。']
   };
   const spoken={
     'look after':['Look after yourself, and call me when you get home.','照顾好自己，到家后给我打电话。'],
@@ -1079,27 +1192,6 @@ function getKnownSentence(en,level){
   };
   const bank=level==='spoken'?{...natural,...spoken}:level==='exam'?{...natural,...exam}:natural;
   return bank[key]?{sentence_en:bank[key][0],sentence_zh:bank[key][1]}:null;
-}
-function getTemplatePool(level,w){
-  if(level==='spoken'){
-    return [
-      x=>({sentence_en:`I did not expect ${articleFor(x.en)} ${x.en} here.`,sentence_zh:`我没想到这里会有${x.zh||x.en}。`}),
-      x=>({sentence_en:`We need to ${x.en} before it gets late.`,sentence_zh:`天晚之前我们需要${x.zh||x.en}。`}),
-      x=>({sentence_en:`Do not forget to ${x.en} before you leave.`,sentence_zh:`离开前别忘了${x.zh||x.en}。`})
-    ];
-  }
-  if(level==='exam'){
-    return [
-      x=>({sentence_en:`Many students find it hard to ${x.en} in a new place.`,sentence_zh:`许多学生发现在新地方${x.zh||x.en}并不容易。`}),
-      x=>({sentence_en:`The report explains why ${x.en} matters to everyday life.`,sentence_zh:`这份报告解释了为什么${x.zh||x.en}与日常生活有关。`}),
-      x=>({sentence_en:`A small change can help people ${x.en} more easily.`,sentence_zh:`一个小改变能帮助人们更容易地${x.zh||x.en}。`})
-    ];
-  }
-  return [
-    x=>({sentence_en:`My family tries to ${x.en} at home.`,sentence_zh:`我的家人在家里尽量${x.zh||x.en}。`}),
-    x=>({sentence_en:`We talked about ${x.en} after class.`,sentence_zh:`下课后我们聊到了${x.zh||x.en}。`}),
-    x=>({sentence_en:`This habit helps us ${x.en} every day.`,sentence_zh:`这个习惯帮助我们每天${x.zh||x.en}。`})
-  ];
 }
 function articleFor(text){
   return /^[aeiou]/i.test(text||'')?'an':'a';
@@ -1249,7 +1341,7 @@ function renderStory(){
         <button class="btn btn-outline btn-sm" onclick="speakStory()">朗读短文</button>
       </div>
     </div>
-    <div class="generator-status" id="story-status">会尽量包含本课前 5-10 个单词；配置 AI 时效果更自然。</div>
+    <div class="generator-status" id="story-status">会尽量包含本课前 5-10 个单词；${getAiConfig().key?'当前会优先调用 AI。':'当前未配置 API Key，将使用本地通用短文。'}</div>
   </div>
   <div id="story-box">${p?storyHtml(p):'<div class="empty-state"><div class="emoji">📖</div><p>点击“生成短文”，把今天的单词串成一篇可朗读的小语篇。</p></div>'}</div>`;
 }
@@ -1265,16 +1357,21 @@ async function generateStory(){
   if(!words.length)return;
   const cfg=getAiConfig();
   const style=document.getElementById('story-style')?.value||'daily';
-  setStoryStatus('正在生成 Clara 小语篇...');
+  setStoryStatus(cfg.key?`正在调用 ${aiProviderName(cfg.provider)} (${cfg.model}) 生成短文...`:'未配置 API Key，正在使用本地通用短文生成...');
+  let statusText='';
+  let statusBad=false;
   try{
     l.passage=cfg.key?await generateStoryWithAi(words,cfg,style):generateStoryLocal(words,style);
+    statusText=cfg.key?`短文已由 ${aiProviderName(cfg.provider)} 生成。`:'短文已由本地通用生成，配置 AI 后会更自然。';
   }catch(e){
     console.error(e);
     l.passage=generateStoryLocal(words,style);
-    setStoryStatus('AI 暂时不可用，已使用本地语篇生成。',true);
+    statusText=`AI 调用失败，已改用本地通用短文。失败原因：${e.message||'接口请求失败'}`;
+    statusBad=true;
   }
   save();
   renderStory();
+  setStoryStatus(statusText,statusBad);
 }
 function setStoryStatus(text,isBad){const el=document.getElementById('story-status');if(el){el.textContent=text;el.style.color=isBad?'var(--red)':'var(--text-3)';}}
 async function generateStoryWithAi(words,cfg,style){
@@ -1300,12 +1397,30 @@ function generateStoryLocal(words,style){
     }
     return {en:'In the morning, Leo had a quick shower and turned off the tap carefully. He wanted to save water because every drop matters. On his way to school, he picked up a plastic bottle and put it in the recycle bin. The air felt clean after the rain, and the trees around him seemed to look after the planet quietly.',zh:'早上，Leo 快速洗了个淋浴，并认真关掉水龙头。他想节约用水，因为每一滴水都很重要。上学路上，他捡起一个塑料瓶，把它放进回收箱。雨后的空气很清新，周围的树木仿佛在安静地守护这个星球。'};
   }
-  if(style==='exam'){
-    return {en:'The bus stopped near a quiet street, and Anna looked after her little brother as they crossed the road. A sign was called “The Old Garden,” but the place looked new and clean. They sat under a light, drank some water, and listened to the wind in the trees. It was a simple afternoon, but it became an important memory.',zh:'公交车停在一条安静的街道旁，Anna 在过马路时照看着弟弟。一个牌子叫“老花园”，但这个地方看起来又新又干净。他们坐在一盏灯下，喝了些水，听树间的风声。这是一个简单的下午，却成了一段重要的回忆。'};
-  }
-  return {en:'Before dinner, Ben helped his grandmother in the kitchen. He turned on the light, washed some fruit with clean water, and kept the table tidy. His grandmother asked him to look after the soup for a minute. Outside, the evening air was cool, and the small house felt warm and safe.',zh:'晚饭前，Ben 在厨房帮奶奶。他打开灯，用干净的水洗水果，并保持桌面整洁。奶奶让他照看一会儿汤。屋外，傍晚的空气很凉爽，小屋里却温暖又安心。'};
+  return generateGenericStory(words,style);
 }
 function hasAny(list,items){return items.some(x=>list.includes(x));}
+function generateGenericStory(words,style){
+  const picked=words.slice(0,8);
+  const sentences=picked.map((w,i)=> {
+    const hit=getKnownSentence(w.en,style==='exam'?'exam':'natural');
+    return hit ? {en:hit.sentence_en,zh:hit.sentence_zh} : generateFallbackSentence(w,style==='exam'?'exam':'natural',i);
+  });
+  const start=style==='exam'
+    ? 'One afternoon, the children joined a small activity after class.'
+    : style==='school'
+      ? 'After class, the children stayed in the classroom for a small activity.'
+      : 'On Saturday afternoon, the children spent time together at home and outside.';
+  const startZh=style==='exam'
+    ? '一天下午，孩子们课后参加了一个小活动。'
+    : style==='school'
+      ? '下课后，孩子们留在教室里参加一个小活动。'
+      : '周六下午，孩子们在家里和户外一起度过时光。';
+  return {
+    en:[start,...sentences.slice(0,6).map(s=>s.sentence_en||s.en),'The activity ended with everyone sharing one thing they remembered.'].join(' '),
+    zh:[startZh,...sentences.slice(0,6).map(s=>s.sentence_zh||s.zh),'活动结束时，每个人都分享了一件自己记住的事情。'].join('')
+  };
+}
 function speakStory(){const l=getActive();if(l?.passage?.en)speakEN(l.passage.en);}
 
 // ─── MATCH GAME ───
