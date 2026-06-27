@@ -974,16 +974,9 @@ function renderSentenceGenerator(){
     <div class="generator-head">
       <h3>✨ 自动生成相关句子</h3>
     </div>
-    <div class="generator-tools">
-      <select id="ai-level">
-        <option value="natural" ${cfg.level==='natural'?'selected':''}>日常地道用法：真实生活场景</option>
-        <option value="spoken" ${cfg.level==='spoken'?'selected':''}>电影/口语风格：自然对白参考</option>
-        <option value="exam" ${cfg.level==='exam'?'selected':''}>真题风格：阅读/完形原创新句</option>
-      </select>
-      <div class="generator-buttons">
-        <button class="btn btn-primary btn-sm" onclick="generateSentences('missing')">补全缺失</button>
-        <button class="btn btn-outline btn-sm" onclick="generateSentences('all')">全部重生成</button>
-      </div>
+    <div class="generator-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn btn-primary btn-sm" onclick="generateSentences('missing')">✨ 为缺失单词生成例句</button>
+      <button class="btn btn-outline btn-sm" onclick="generateSentences('all')">🔄 全部重新生成</button>
     </div>
     ${showSettings?`<details class="generator-settings">
       <summary>AI 设置</summary>
@@ -1040,7 +1033,7 @@ function readAiConfig(){
       key:CLARA_SITE_AI.key,
       endpoint:CLARA_SITE_AI.endpoint,
       model:CLARA_SITE_AI.model,
-      level:document.getElementById('ai-level')?.value||localStorage.getItem('vocab_ai_level')||'natural',
+      level:'natural',
       siteManaged:true
     };
   }
@@ -1049,7 +1042,7 @@ function readAiConfig(){
     key:document.getElementById('ai-key')?.value.trim()||'',
     endpoint:document.getElementById('ai-endpoint')?.value.trim()||'https://api.openai.com/v1/chat/completions',
     model:document.getElementById('ai-model')?.value.trim()||'gpt-4.1-mini',
-    level:document.getElementById('ai-level')?.value||'natural'
+    level:'natural'
   };
   localStorage.setItem('vocab_ai_provider',cfg.provider);
   localStorage.setItem('vocab_ai_key',cfg.key);
@@ -1154,11 +1147,7 @@ function extractAiContent(data,provider){
   return data.choices?.[0]?.message?.content||data.output_text||'';
 }
 async function generateWithAi(words,cfg){
-  const styleText={
-    natural:'natural daily-life usage. The sentence must show how the word or phrase is actually used in a realistic situation',
-    spoken:'movie-like spoken dialogue style, but do not quote or imitate any specific copyrighted line. Make it sound like natural conversation',
-    exam:'original exam-style sentences similar to reading comprehension or cloze-test language. Do not claim they are from a real exam'
-  }[cfg.level]||'natural daily-life usage';
+  const styleText='natural daily-life usage appropriate for primary school students (age 8-12). The sentence must show how the word or phrase is actually used in a realistic everyday situation';
   const payload={
     model:cfg.model,
     messages:[
@@ -1431,16 +1420,10 @@ function renderStory(){
   const p=l.passage||null;
   c.innerHTML=`<div class="generator-box">
     <div class="generator-head"><h3>📖 词串成文</h3></div>
-    <div class="generator-tools">
-      <select id="story-style">
-        <option value="daily">日常小故事</option>
-        <option value="school">校园情境</option>
-        <option value="exam">阅读理解风格</option>
-      </select>
-      <div class="generator-buttons">
-        <button class="btn btn-primary btn-sm" onclick="generateStory()">生成短文</button>
-        <button class="btn btn-outline btn-sm" onclick="speakStory()">朗读短文</button>
-      </div>
+    <div class="generator-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn btn-primary btn-sm" onclick="generateStory()">✨ 生成短文</button>
+      <button class="btn btn-outline btn-sm" onclick="speakStory()">🔊 朗读短文</button>
+    </div>
     </div>
     <div class="generator-status" id="story-status">会尽量包含本课前 5-10 个单词；${getAiConfig().key?'当前会优先调用 AI。':'当前未配置 API Key，将使用本地通用短文。'}</div>
   </div>
@@ -1457,7 +1440,7 @@ async function generateStory(){
   const words=(l.words||[]).filter(w=>w.en).slice(0,10);
   if(!words.length)return;
   const cfg=getAiConfig();
-  const style=document.getElementById('story-style')?.value||'daily';
+  const style='daily';
   setStoryStatus(cfg.key?`正在调用 ${aiProviderName(cfg.provider)} (${cfg.model}) 生成短文...`:'未配置 AI Key，使用本地短文模板（在 AI 设置 中配置 Key 可获得更自然的短文）');
   let statusText='';
   let statusBad=false;
@@ -1476,7 +1459,7 @@ async function generateStory(){
 }
 function setStoryStatus(text,isBad){const el=document.getElementById('story-status');if(el){el.textContent=text;el.style.color=isBad?'var(--red)':'var(--text-3)';}}
 async function generateStoryWithAi(words,cfg,style){
-  const styleText={daily:'a warm daily-life mini story',school:'a school scene mini story',exam:'an original reading-comprehension style paragraph'}[style]||'a mini story';
+  const styleText='a warm, natural daily-life mini story suitable for primary school students (age 8-12)';
   const payload={model:cfg.model,messages:[
     {role:'system',content:'Create short English reading passages for Chinese English learners. Return only valid JSON. The passage must be a real scene or story, not a meta text about reviewing vocabulary.'},
     {role:'user',content:`Write ${styleText} using all or most of these words naturally in context. Do not write sentences like "Clara reviewed these words" or "students used these words". Make the words do real work in the story. Keep it 70-100 English words. Include Chinese translation. Return JSON with keys en and zh. Words: ${JSON.stringify(words.map(w=>({en:w.en,zh:w.zh})))} `}
