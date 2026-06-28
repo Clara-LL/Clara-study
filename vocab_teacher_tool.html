@@ -187,6 +187,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .metric-num{font-size:28px;font-weight:800;color:var(--accent);line-height:1.1}
 .metric-label{font-size:12px;color:var(--text-3);margin-top:4px}
 .weak-list,.story-box,.game-board{display:flex;flex-direction:column;gap:10px}
+.weak-section{margin-bottom:18px}
+.weak-section-title{font-size:15px;font-weight:800;color:var(--text);margin:8px 0 10px;display:flex;align-items:center;gap:8px}
+.weak-section-title span{font-size:12px;color:var(--text-3);font-weight:700}
 .weak-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:13px 15px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
 .weak-en{font-size:17px;font-weight:800;color:var(--text);margin-bottom:3px}
 .weak-meta{font-size:12px;color:var(--text-3);line-height:1.5}
@@ -203,6 +206,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .match-card.selected{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .match-card.done{background:var(--green-bg);border-color:var(--green);color:var(--green);cursor:default}
 .match-card.bad{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+.finish-card{background:var(--card);border:1.5px solid var(--accent);border-radius:var(--radius-lg);padding:18px;text-align:center;box-shadow:var(--shadow);margin-top:14px}
+.finish-title{font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px}
+.finish-sub{font-size:13px;color:var(--text-3);line-height:1.6;margin-bottom:14px}
+.finish-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 
 /* ── MISC ── */
 .divider{height:1px;background:var(--border);margin:20px 0}
@@ -247,12 +254,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
     <button class="nav-tab active" onclick="showPanel('manage')" id="tab-manage">✏️ 录入单词</button>
     <button class="nav-tab" onclick="showPanel('browse')" id="tab-browse">📋 卡片浏览</button>
     <button class="nav-tab" onclick="showPanel('readword')" id="tab-readword">🎤 跟读单词</button>
+    <button class="nav-tab" onclick="showPanel('game')" id="tab-game">🎮 极速配</button>
     <button class="nav-tab" onclick="showPanel('listen')" id="tab-listen">👂 听说练习</button>
     <button class="nav-tab" onclick="showPanel('dictation')" id="tab-dictation">✍️ 听写练习</button>
-    <button class="nav-tab" onclick="showPanel('sentence')" id="tab-sentence">💬 句子拓展</button>
     <button class="nav-tab" onclick="showPanel('weak')" id="tab-weak">🧠 薄弱词仓</button>
+    <button class="nav-tab" onclick="showPanel('sentence')" id="tab-sentence">💬 句子拓展</button>
     <button class="nav-tab" onclick="showPanel('story')" id="tab-story">📖 Clara 小语篇</button>
-    <button class="nav-tab" onclick="showPanel('game')" id="tab-game">🎮 极速配</button>
     <button class="nav-tab" onclick="showPanel('report')" id="tab-report">📊 学习战报</button>
   </div>
   <div class="lesson-badge" id="active-badge">未选课时</div>
@@ -364,7 +371,7 @@ exercise  /ˈeksəsaɪz/  n./v. 锻炼</pre>
 <!-- WEAK PANEL -->
 <div class="panel" id="panel-weak">
   <div class="sec-title">薄弱词仓</div>
-  <div class="sec-sub">自动收集听写错误和手动标记的需复习单词，复习更有靶心。</div>
+  <div class="sec-sub">按听说、听写、极速配三类整理错词，复习更有靶心。</div>
   <div id="weak-content"></div>
 </div>
 
@@ -477,8 +484,20 @@ function markWeak(word,reason){
   if(!word) return;
   word.weakCount=(word.weakCount||0)+1;
   word.weakReason=reason;
+  const source=weakSourceFromReason(reason);
+  if(source){
+    word.weakSources=word.weakSources||{};
+    word.weakSources[source]=(word.weakSources[source]||0)+1;
+  }
   word.weakAt=new Date().toLocaleString();
   word.mastered=false;
+}
+function weakSourceFromReason(reason){
+  const r=reason||'';
+  if(r.includes('听说')) return 'listen';
+  if(r.includes('听写')||r.includes('查看听写答案')) return 'dictation';
+  if(r.includes('极速配')) return 'game';
+  return '';
 }
 function clearWeak(word){
   if(!word) return;
@@ -486,6 +505,7 @@ function clearWeak(word){
   word.weakCount=0;
   word.weakReason='';
   word.weakAt='';
+  word.weakSources={};
 }
 
 // ─── LESSONS ───
@@ -762,6 +782,42 @@ function browseClick(i) {
   speakEN(l.words[i].en, ()=>{ playingIdx=-1; renderBrowseGrid(l.words); });
 }
 
+// ─── STAGE FLOW ───
+const STAGE_FLOW=['browse','readword','game','listen','dictation','weak','sentence','story','report'];
+const STAGE_LABELS={browse:'卡片浏览',readword:'跟读单词',game:'极速配',listen:'听说练习',dictation:'听写练习',weak:'薄弱词仓',sentence:'句子拓展',story:'Clara 小语篇',report:'学习战报'};
+function stageCompleteHtml(stage){
+  const next=nextStageId(stage);
+  return `<div class="finish-card">
+    <div class="finish-title">本环节完成</div>
+    <div class="finish-sub">${escHtml(STAGE_LABELS[stage]||'当前环节')}已经做完了，可以进入${escHtml(STAGE_LABELS[next]||'下一环节')}，也可以从头重做一遍。</div>
+    <div class="finish-actions">
+      <button class="btn btn-primary" onclick="goNextStage('${stage}')">下一环节</button>
+      <button class="btn btn-outline" onclick="restartStage('${stage}')">重做一遍</button>
+    </div>
+  </div>`;
+}
+function showStageComplete(stage){
+  if(stage==='readword'){document.getElementById('readword-content').innerHTML=stageCompleteHtml(stage);return;}
+  if(stage==='listen'){document.getElementById('listen-content').innerHTML=stageCompleteHtml(stage);return;}
+  if(stage==='dictation'){document.getElementById('dictation-content').innerHTML=stageCompleteHtml(stage);return;}
+  if(stage==='game'){
+    const b=document.getElementById('game-board');
+    if(b) b.insertAdjacentHTML('beforeend',stageCompleteHtml(stage));
+  }
+}
+function nextStageId(stage){
+  const i=STAGE_FLOW.indexOf(stage);
+  return STAGE_FLOW[(i+1+STAGE_FLOW.length)%STAGE_FLOW.length]||'browse';
+}
+function goNextStage(stage){showPanel(nextStageId(stage));}
+function restartStage(stage){
+  if(stage==='readword'){readIdx=0;renderReadWord();if(autoActive)rwSpeakSchedule();else rwSpeak();return;}
+  if(stage==='listen'){listenIdx=0;listenAnswerShown=false;renderListen();if(listenAuto)listenAutoSchedule();else listenSpeak();return;}
+  if(stage==='dictation'){dictIdx=0;dictChecked=false;renderDictation();if(dictAuto)dictAutoSchedule();return;}
+  if(stage==='game'){startGame();return;}
+  showPanel(stage);
+}
+
 // ─── READ WORD ───
 function renderReadWord() {
   const l=getActive();
@@ -816,9 +872,16 @@ function rwSpeak(cb) {
   speakEN(w.en, afterWord);
 }
 function resetSpeakBtn(btn){if(btn){btn.classList.remove('speaking');btn.textContent='🔊 朗读发音';}}
-function rwNext(){clearTimeout(autoTimer);readIdx=(readIdx+1)%(getActive()?.words.length||1);renderReadWord();if(autoActive)rwSpeakSchedule();else rwSpeak();}
+function rwNext(){
+  clearTimeout(autoTimer);
+  const len=getActive()?.words.length||0;
+  if(len&&readIdx>=len-1){showStageComplete('readword');return;}
+  readIdx=(readIdx+1)%(len||1);
+  renderReadWord();
+  if(autoActive)rwSpeakSchedule();else rwSpeak();
+}
 function rwPrev(){clearTimeout(autoTimer);readIdx=(readIdx-1+( getActive()?.words.length||1))%( getActive()?.words.length||1);renderReadWord();if(autoActive)rwSpeakSchedule();}
-function rwSpeakSchedule(){clearTimeout(autoTimer);rwSpeak(()=>{if(!autoActive)return;autoTimer=setTimeout(()=>{if(!autoActive)return;readIdx=(readIdx+1)%( getActive()?.words.length||1);renderReadWord();rwSpeakSchedule();},rwInterval);});}
+function rwSpeakSchedule(){clearTimeout(autoTimer);rwSpeak(()=>{if(!autoActive)return;autoTimer=setTimeout(()=>{if(!autoActive)return;const len=getActive()?.words.length||0;if(len&&readIdx>=len-1){showStageComplete('readword');return;}readIdx=(readIdx+1)%(len||1);renderReadWord();rwSpeakSchedule();},rwInterval);});}
 function rwSetInterval(){rwInterval=parseInt(document.getElementById('rw-interval')?.value||5000);}
 function rwToggleAuto(){autoActive=document.getElementById('rw-auto')?.checked;rwSetInterval();if(autoActive)rwSpeakSchedule();else rwStop();}
 function rwStop(){autoActive=false;const cb=document.getElementById('rw-auto');if(cb)cb.checked=false;clearTimeout(autoTimer);if(window.speechSynthesis)window.speechSynthesis.cancel();const btn=document.getElementById('rw-speak-btn');resetSpeakBtn(btn);}
@@ -880,7 +943,7 @@ function listenMark(ok){
   const l=getActive();if(!l)return;
   const w=l.words[listenIdx];
   recordStudy('listen',ok,w);
-  ok ? clearWeak(w) : markWeak(w,'听说需复习');
+  ok ? clearWeak(w) : markWeak(w,'听说错误');
   save();
   renderListen();
 }
@@ -905,8 +968,10 @@ function listenPrev(){
 function listenAdvanceNext(){
   clearTimeout(listenAutoTimer);
   clearTimeout(listenAdvanceTimer);
+  const len=getActive()?.words.length||0;
+  if(len&&listenIdx>=len-1){showStageComplete('listen');return;}
   listenAnswerShown=false;
-  listenIdx=(listenIdx+1)%(getActive()?.words.length||1);
+  listenIdx=(listenIdx+1)%(len||1);
   renderListen();
   if(listenAuto) listenAutoSchedule(); else listenSpeak();
 }
@@ -1090,8 +1155,10 @@ function dictShowAnswer(ok,reason){
 function dictAdvanceNow(){
   clearTimeout(dictAutoTimer);
   clearTimeout(dictAdvanceTimer);
+  const len=getActive()?.words.length||0;
+  if(len&&dictIdx>=len-1){showStageComplete('dictation');return;}
   dictChecked=false;
-  dictIdx=(dictIdx+1)%(getActive()?.words.length||1);
+  dictIdx=(dictIdx+1)%(len||1);
   renderDictation();
   if(dictAuto)dictAutoSchedule();
 }
@@ -1576,24 +1643,45 @@ function renderWeak(){
   const c=document.getElementById('weak-content');
   const entries=getWeakEntries();
   if(!entries.length){
-    c.innerHTML='<div class="empty-state"><div class="emoji">🧠</div><p>薄弱词仓现在是空的。<br>听写错误或跟读标记“需复习”的单词会自动来到这里。</p></div>';
+    c.innerHTML='<div class="empty-state"><div class="emoji">🧠</div><p>薄弱词仓现在是空的。<br>听说标记、听写错误、极速配错配的单词会自动来到这里。</p></div>';
     return;
   }
+  const groups=[
+    {key:'listen',title:'听说错误'},
+    {key:'dictation',title:'听写错误'},
+    {key:'game',title:'极速配错误'}
+  ];
   c.innerHTML=`<div class="mini-grid">
     <div class="metric-card"><div class="metric-num">${entries.length}</div><div class="metric-label">待攻克薄弱词</div></div>
     <div class="metric-card"><div class="metric-num">${entries.reduce((s,e)=>s+(e.word.weakCount||0),0)}</div><div class="metric-label">累计暴露次数</div></div>
   </div>
-  <div class="weak-list">${entries.map((e,i)=>`
+  ${groups.map(g=>weakGroupHtml(g,entries)).join('')}`;
+}
+function weakEntryHasSource(entry,source){
+  const sources=entry.word.weakSources||{};
+  if(sources[source]>0) return true;
+  return !Object.keys(sources).length && weakSourceFromReason(entry.word.weakReason)===source;
+}
+function weakSourceCount(entry,source){
+  const sources=entry.word.weakSources||{};
+  return sources[source]||((!Object.keys(sources).length&&weakSourceFromReason(entry.word.weakReason)===source)?(entry.word.weakCount||1):0);
+}
+function weakGroupHtml(group,entries){
+  const items=entries.map((e,i)=>({...e,index:i})).filter(e=>weakEntryHasSource(e,group.key));
+  return `<div class="weak-section">
+    <div class="weak-section-title">${group.title}<span>${items.length} 个</span></div>
+    ${items.length?`<div class="weak-list">${items.map(e=>`
     <div class="weak-card">
       <div>
         <div class="weak-en">${escHtml(e.word.en)} <span class="sent-tag">${escHtml(e.lesson.name)}</span></div>
-        <div class="weak-meta">${escHtml(e.word.zh||'')} · ${escHtml(e.word.weakReason||'需复习')} · ${e.word.weakCount||1} 次</div>
+        <div class="weak-meta">${escHtml(e.word.zh||'')} · ${group.title} · ${weakSourceCount(e,group.key)||1} 次 · 最近：${escHtml(e.word.weakReason||'需复习')}</div>
       </div>
       <div class="weak-actions">
-        <button class="btn btn-outline btn-sm" onclick="weakSpeak(${i})">🔊 发音</button>
-        <button class="btn btn-green btn-sm" onclick="weakMaster(${i})">已攻克</button>
+        <button class="btn btn-outline btn-sm" onclick="weakSpeak(${e.index})">🔊 发音</button>
+        <button class="btn btn-green btn-sm" onclick="weakMaster(${e.index})">已攻克</button>
       </div>
-    </div>`).join('')}</div>`;
+    </div>`).join('')}</div>`:'<div class="empty-state" style="padding:18px"><p>这一类暂时没有薄弱词。</p></div>'}
+  </div>`;
 }
 function weakSpeak(i){const e=getWeakEntries()[i];if(e)speakEN(e.word.en);}
 function weakMaster(i){const e=getWeakEntries()[i];if(!e)return;clearWeak(e.word);save();renderWeak();renderLessons();}
@@ -1709,8 +1797,8 @@ function startGame(){
   clearInterval(gameTimer);
   const l=getActive();if(!l)return;
   const pairs=shuffle((l.words||[]).filter(w=>w.en&&w.zh)).slice(0,8).map((w,i)=>({id:i,en:w.en,zh:w.zh,done:false}));
-  gameState={pairs,left:shuffle([...pairs]),right:shuffle([...pairs]),selected:null,score:0,time:60};
-  gameTimer=setInterval(()=>{if(!gameState)return;gameState.time--;updateGameTop();if(gameState.time<=0){clearInterval(gameTimer);}},1000);
+  gameState={pairs,left:shuffle([...pairs]),right:shuffle([...pairs]),selected:null,score:0,time:60,completed:false};
+  gameTimer=setInterval(()=>{if(!gameState)return;gameState.time--;updateGameTop();if(gameState.time<=0){finishGame();}},1000);
   renderGameBoard();
 }
 function renderGameBoard(){
@@ -1739,12 +1827,19 @@ function matchPick(id,side){
   }
   gameState.selected=null;
   renderGameBoard();
-  if(gameState.pairs.every(x=>x.done)){clearInterval(gameTimer);document.getElementById('game-time').textContent='完成！';}
+  if(gameState.pairs.every(x=>x.done)) finishGame();
+}
+function finishGame(){
+  if(!gameState||gameState.completed)return;
+  gameState.completed=true;
+  clearInterval(gameTimer);
+  const t=document.getElementById('game-time');if(t)t.textContent='完成！';
+  showStageComplete('game');
 }
 function updateGameTop(){
   const s=document.getElementById('game-score');const t=document.getElementById('game-time');
   if(s&&gameState)s.textContent=`得分 ${gameState.score}`;
-  if(t&&gameState)t.textContent=gameState.pairs.every(x=>x.done)?'完成！':`${gameState.time} 秒`;
+  if(t&&gameState)t.textContent=gameState.completed||gameState.pairs.every(x=>x.done)?'完成！':`${gameState.time} 秒`;
 }
 function markGameWeak(pair,reason){
   const l=getActive();if(!l||!pair)return;
@@ -1847,7 +1942,7 @@ function importArchive(file){
 
 // ─── PANEL SWITCH ───
 function showPanel(id) {
-  ['manage','browse','readword','listen','dictation','sentence','weak','story','game','report'].forEach(p=>{
+  ['manage','browse','readword','game','listen','dictation','weak','sentence','story','report'].forEach(p=>{
     const panel=document.getElementById('panel-'+p);
     const tab=document.getElementById('tab-'+p);
     if(panel) panel.classList.toggle('active',p===id);
@@ -1860,12 +1955,12 @@ function showPanel(id) {
   if(id==='browse') renderBrowse();
   if(id==='readword') renderReadWord();
   listenStopAuto();dictStopAuto();
+  if(id==='game') renderGame();
   if(id==='listen') renderListen();
   if(id==='dictation') renderDictation();
-  if(id==='sentence') renderSentence();
   if(id==='weak') renderWeak();
+  if(id==='sentence') renderSentence();
   if(id==='story') renderStory();
-  if(id==='game') renderGame();
   if(id==='report') renderReport();
 }
 window.showPanel=showPanel;
