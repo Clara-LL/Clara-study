@@ -475,6 +475,7 @@ let dictCursor = 0;
 let studyStats = null;
 let gameState = null;
 let gameTimer = null;
+let weakPractice = null;
 
 function load() {
   try { lessons = JSON.parse(localStorage.getItem('vocab_lessons') || '[]'); } catch(e){ lessons=[]; }
@@ -955,11 +956,11 @@ function rwStop(){autoActive=false;const cb=document.getElementById('rw-auto');i
 
 // ─── LISTEN SPEAK MODE ───
 function renderListen(){
-  const l=getActive();
   const c=document.getElementById('listen-content');
-  if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
-  listenIdx=Math.min(listenIdx,l.words.length-1);
-  const w=l.words[listenIdx];
+  const words=wordsForMode('listen');
+  if(!words.length){c.innerHTML='<div class="no-words">📭 当前没有可练习的单词</div>';return;}
+  listenIdx=Math.min(listenIdx,words.length-1);
+  const w=words[listenIdx];
   const main=listenMainHtml(w);
   const answer=listenAnswerHtml(w);
   c.innerHTML=`
@@ -979,7 +980,7 @@ function renderListen(){
       </div>
       <div class="nav-row">
         <button class="nav-btn" onclick="listenPrev()">← 上一个</button>
-        <span class="prog-label">${listenIdx+1} / ${l.words.length}</span>
+        <span class="prog-label">${listenIdx+1} / ${words.length}</span>
         <button class="nav-btn" onclick="listenNext()">下一个 →</button>
       </div>
       <div class="auto-row">
@@ -1025,8 +1026,8 @@ function updateSpeakerToggle(kind,on){
   if(btn) btn.outerHTML=speakerToggleHtml(kind,on);
 }
 function speakCurrentListen(cb){
-  const l=getActive();if(!l)return;
-  const w=l.words[listenIdx];
+  const words=wordsForMode('listen');if(!words.length)return;
+  const w=words[listenIdx];
   if(listenMode==='zh2en') speakZH(w.zh||'',cb);
   else speakEN(w.en,cb);
 }
@@ -1036,8 +1037,8 @@ function listenSpeak(cb){
 }
 function listenReveal(){listenAnswerShown=true;document.getElementById('listen-answer')?.classList.add('show');}
 function listenMark(ok){
-  const l=getActive();if(!l)return;
-  const w=l.words[listenIdx];
+  const words=wordsForMode('listen');if(!words.length)return;
+  const w=words[listenIdx];
   recordStudy('listen',ok,w);
   ok ? clearWeak(w) : markWeak(w,'听说错误');
   save();
@@ -1057,15 +1058,15 @@ function listenPrev(){
   clearTimeout(listenAutoTimer);
   clearTimeout(listenAdvanceTimer);
   listenAnswerShown=false;
-  listenIdx=(listenIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);
+  listenIdx=(listenIdx-1+(wordsForMode('listen').length||1))%(wordsForMode('listen').length||1);
   renderListen();
   if(listenAuto) listenAutoSchedule(); else listenSpeak();
 }
 function listenAdvanceNext(){
   clearTimeout(listenAutoTimer);
   clearTimeout(listenAdvanceTimer);
-  const len=getActive()?.words.length||0;
-  if(len&&listenIdx>=len-1){showStageComplete('listen');return;}
+  const len=wordsForMode('listen').length||0;
+  if(len&&listenIdx>=len-1){weakPractice?.mode==='listen'?finishWeakPractice():showStageComplete('listen');return;}
   listenAnswerShown=false;
   listenIdx=(listenIdx+1)%(len||1);
   renderListen();
@@ -1250,11 +1251,11 @@ function playKeySound(){
 
 // ─── DICTATION MODE ───
 function renderDictation(){
-  const l=getActive();
   const c=document.getElementById('dictation-content');
-  if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
-  dictIdx=Math.min(dictIdx,l.words.length-1);
-  const w=l.words[dictIdx];
+  const words=wordsForMode('dictation');
+  if(!words.length){c.innerHTML='<div class="no-words">📭 当前没有可练习的单词</div>';return;}
+  dictIdx=Math.min(dictIdx,words.length-1);
+  const w=words[dictIdx];
   dictSlotState=makeSlotState(w.en);
   dictCursor=0;
   c.innerHTML=`
@@ -1277,7 +1278,7 @@ function renderDictation(){
       </div>
       <div class="nav-row">
         <button class="nav-btn" onclick="dictPrev()">← 上一个</button>
-        <span class="prog-label">${dictIdx+1} / ${l.words.length}</span>
+        <span class="prog-label">${dictIdx+1} / ${words.length}</span>
         <button class="nav-btn" onclick="dictNext()">下一个 →</button>
       </div>
       <div class="auto-row">
@@ -1301,12 +1302,12 @@ function normalizeAnswer(s){return(s||'').toLowerCase().replace(/[’']/g,'').re
 function answerLetterCount(s){return normalizeAnswer(s).replace(/\s/g,'').length;}
 function compactAnswer(s){return normalizeAnswer(s).replace(/\s/g,'');}
 function dictSpeak(){
-  const l=getActive();if(!l)return;
-  if(dictSoundOn)speakEN(l.words[dictIdx].en);
+  const words=wordsForMode('dictation');if(!words.length)return;
+  if(dictSoundOn)speakEN(words[dictIdx].en);
 }
 function dictCheck(){
-  const l=getActive();if(!l)return;
-  const w=l.words[dictIdx];
+  const words=wordsForMode('dictation');if(!words.length)return;
+  const w=words[dictIdx];
   const input=document.getElementById('dict-input');
   const ok=compactAnswer(slotStateValue(dictSlotState))===compactAnswer(w.en);
   dictChecked=true;
@@ -1318,24 +1319,24 @@ function dictCheck(){
   return ok;
 }
 function dictMaybeAutoCheck(){
-  const l=getActive();if(!l||dictChecked)return;
+  const words=wordsForMode('dictation');if(!words.length||dictChecked)return;
   const val=slotStateValue(dictSlotState);
-  if(answerLetterCount(val)<answerLetterCount(l.words[dictIdx].en)) return;
+  if(answerLetterCount(val)<answerLetterCount(words[dictIdx].en)) return;
   const ok=dictCheck();
   clearTimeout(dictAutoTimer);
   clearTimeout(dictAdvanceTimer);
   dictAdvanceTimer=setTimeout(()=>dictNext(true),ok?700:1200);
 }
 function dictHint(){
-  const l=getActive();if(!l)return;
-  const ans=l.words[dictIdx].en;
+  const words=wordsForMode('dictation');if(!words.length)return;
+  const ans=words[dictIdx].en;
   const hint=ans.replace(/[A-Za-z]/g,(ch,i)=>i===0||ans[i-1]===' ' ? ch : '_');
   const fb=document.getElementById('dict-feedback');
   if(fb){fb.className='feedback';fb.textContent='提示：'+hint;}
 }
 function dictReveal(){
-  const l=getActive();if(!l)return;
-  const w=l.words[dictIdx];
+  const words=wordsForMode('dictation');if(!words.length)return;
+  const w=words[dictIdx];
   markWeak(w,'查看默写答案');
   recordStudy('dictation',false,w);
   save();
@@ -1343,7 +1344,7 @@ function dictReveal(){
   const input=document.getElementById('dict-input');
   if(input) input.dataset.graded='1';
   dictShowAnswer(false,'查看默写答案');
-  if(dictSoundOn)speakEN(l.words[dictIdx].en);
+  if(dictSoundOn)speakEN(words[dictIdx].en);
 }
 function dictNext(){
   clearTimeout(dictAutoTimer);
@@ -1356,10 +1357,10 @@ function dictNext(){
   dictGradeBeforeLeave('默写未填写');
   dictAdvanceTimer=setTimeout(dictAdvanceNow,1300);
 }
-function dictPrev(){clearTimeout(dictAutoTimer);clearTimeout(dictAdvanceTimer);dictChecked=false;dictIdx=(dictIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);renderDictation();if(dictAuto)dictAutoSchedule();}
+function dictPrev(){clearTimeout(dictAutoTimer);clearTimeout(dictAdvanceTimer);dictChecked=false;dictIdx=(dictIdx-1+(wordsForMode('dictation').length||1))%(wordsForMode('dictation').length||1);renderDictation();if(dictAuto)dictAutoSchedule();}
 function dictGradeBeforeLeave(blankReason){
-  const l=getActive();if(!l)return;
-  const w=l.words[dictIdx];
+  const words=wordsForMode('dictation');if(!words.length)return;
+  const w=words[dictIdx];
   const input=document.getElementById('dict-input');
   if(input?.dataset.graded==='1'){
     dictShowAnswer(compactAnswer(slotStateValue(dictSlotState))===compactAnswer(w.en),'已检查');
@@ -1379,8 +1380,8 @@ function dictGradeBeforeLeave(blankReason){
   dictShowAnswer(!!ok,ok?'正确':(val?'默写错误':blankReason));
 }
 function dictShowAnswer(ok,reason){
-  const l=getActive();if(!l)return;
-  const w=l.words[dictIdx];
+  const words=wordsForMode('dictation');if(!words.length)return;
+  const w=words[dictIdx];
   const input=document.getElementById('dict-input');
   const fb=document.getElementById('dict-feedback');
   if(input){
@@ -1400,8 +1401,8 @@ function dictShowAnswer(ok,reason){
 function dictAdvanceNow(){
   clearTimeout(dictAutoTimer);
   clearTimeout(dictAdvanceTimer);
-  const len=getActive()?.words.length||0;
-  if(len&&dictIdx>=len-1){showStageComplete('dictation');return;}
+  const len=wordsForMode('dictation').length||0;
+  if(len&&dictIdx>=len-1){weakPractice?.mode==='dictation'?finishWeakPractice():showStageComplete('dictation');return;}
   dictChecked=false;
   dictIdx=(dictIdx+1)%(len||1);
   renderDictation();
@@ -1422,7 +1423,7 @@ function dictStopAuto(){
 }
 function dictAutoSchedule(){
   clearTimeout(dictAutoTimer);
-  const l=getActive();if(!l)return;
+  const words=wordsForMode('dictation');if(!words.length)return;
   const after=()=>{
     if(!dictAuto)return;
     dictAutoTimer=setTimeout(()=>{
@@ -1431,7 +1432,7 @@ function dictAutoSchedule(){
       dictAdvanceTimer=setTimeout(dictAdvanceNow,1300);
     },dictInterval);
   };
-  if(dictSoundOn)speakEN(l.words[dictIdx].en,after);else after();
+  if(dictSoundOn)speakEN(words[dictIdx].en,after);else after();
 }
 
 // ─── SENTENCE MODE ───
@@ -1913,10 +1914,36 @@ function weakSourceCount(entry,source){
   if(log.length) return Math.max(log.filter(item=>item&&item.source===source).length,sources[source]||0);
   return sources[source]||((!Object.keys(sources).length&&weakSourceFromReason(entry.word.weakReason)===source)?(entry.word.weakCount||1):0);
 }
+function wordsForMode(mode){
+  if(weakPractice&&weakPractice.mode===mode) return (weakPractice.words||[]).filter(w=>w&&!w.mastered);
+  const l=getActive();
+  return (l?.words||[]).filter(w=>w.en);
+}
+function startWeakPractice(source){
+  const entries=getWeakEntries().filter(e=>weakEntryHasSource(e,source));
+  const words=entries.map(e=>e.word).filter(w=>w&&!w.mastered);
+  if(!words.length){renderWeak();return;}
+  weakPractice={source,mode:source==='listen'?'listen':(source==='dictation'?'dictation':'game'),words};
+  if(source==='listen'){
+    listenIdx=0;listenAnswerShown=false;listenMode='en2zh';showPanel('listen');return;
+  }
+  if(source==='dictation'){
+    dictIdx=0;dictChecked=false;showPanel('dictation');return;
+  }
+  if(source==='game'){
+    showPanel('game');return;
+  }
+}
+function finishWeakPractice(){
+  const source=weakPractice?.source;
+  weakPractice=null;
+  showPanel('weak');
+  setTimeout(()=>renderWeak(),0);
+}
 function weakGroupHtml(group,entries){
   const items=entries.map((e,i)=>({...e,index:i})).filter(e=>weakEntryHasSource(e,group.key));
   return `<div class="weak-section">
-    <div class="weak-section-title">${group.title}<span>${items.length} 个</span></div>
+    <div class="weak-section-title">${group.title}<span>${items.length} 个</span>${items.length?`<button class="btn btn-primary btn-sm" onclick="startWeakPractice('${group.key}')">重复练习</button>`:''}</div>
     ${items.length?`<div class="weak-list">${items.map(e=>`
     <div class="weak-card">
       <div>
@@ -2030,9 +2057,9 @@ function speakStory(){const l=getActive();if(l?.passage?.en)speakEN(l.passage.en
 
 // ─── MATCH GAME ───
 function renderGame(){
-  const l=getActive();
   const c=document.getElementById('game-content');
-  if(!l||l.words.length<2){c.innerHTML='<div class="no-words">至少需要 2 个单词才能开始极速配</div>';return;}
+  const words=wordsForMode('game');
+  if(words.length<2){c.innerHTML='<div class="no-words">至少需要 2 个单词才能开始极速配</div>';return;}
   c.innerHTML=`<div class="game-top">
     <button class="btn btn-primary btn-sm" onclick="nextGameBatch()">下一组</button>
     <span class="game-pill" id="game-score">得分 0</span>
@@ -2042,16 +2069,15 @@ function renderGame(){
   startGame(0);
 }
 function getGameWords(){
-  const l=getActive();
-  return (l?.words||[]).filter(w=>w.en&&w.zh);
+  return wordsForMode('game').filter(w=>w.en&&w.zh);
 }
 function gameBatchCount(){
   return Math.max(1,Math.ceil(getGameWords().length/8));
 }
 function startGame(batchIndex){
   clearInterval(gameTimer);
-  const l=getActive();if(!l)return;
   const all=getGameWords();
+  if(!all.length)return;
   const total=gameBatchCount();
   const index=Math.max(0,Math.min(batchIndex||0,total-1));
   const pairs=all.slice(index*8,index*8+8).map((w,i)=>({id:i,en:w.en,zh:w.zh,done:false}));
@@ -2102,7 +2128,7 @@ function finishGame(){
 function showGameBatchComplete(){
   const b=document.getElementById('game-board');if(!b||!gameState)return;
   const isLast=(gameState.batchIndex||0)>=(gameState.totalBatches||1)-1;
-  if(isLast){showStageComplete('game');return;}
+  if(isLast){weakPractice?.mode==='game'?finishWeakPractice():showStageComplete('game');return;}
   b.insertAdjacentHTML('beforeend',`<div class="finish-card">
     <div class="finish-title">第 ${(gameState.batchIndex||0)+1} 组完成</div>
     <div class="finish-sub">已经完成本组 8 个词。可以继续下一组，也可以先换到下一个环节，避免练太久疲惫。</div>
@@ -2246,7 +2272,7 @@ window.showPanel=showPanel;
 document.querySelectorAll('.nav-tab').forEach(btn=>{
   btn.addEventListener('click',e=>{
     const id=(btn.id||'').replace('tab-','');
-    if(id) showPanel(id);
+    if(id){weakPractice=null;showPanel(id);}
   });
 });
 
