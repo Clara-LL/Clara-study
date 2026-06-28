@@ -588,12 +588,29 @@ function accessLearningType(cfg){
   return accessHasFullFeatures(cfg)?'premium':'basic';
 }
 function quotaName(type){return type==='premium'?'全功能学习':'基础学习';}
+function quotaRemaining(code,type,cfg){
+  const limit=quotaLimit(cfg,type);
+  if(limit==null) return Infinity;
+  return Math.max(0,limit-quotaUsed(code,type));
+}
+function chooseLearningSessionType(cfg){
+  if(!currentAccess||!cfg) return null;
+  const hasFull=accessHasFullFeatures(cfg);
+  if(hasFull&&quotaRemaining(currentAccess.code,'premium',cfg)>0) return 'premium';
+  if(quotaRemaining(currentAccess.code,'basic',cfg)>0) return 'basic';
+  return null;
+}
 function consumeLearningSession(newCount,lesson){
   if(teacherMode()||!newCount)return true;
   if(!currentAccess){alert('请先输入访问码。');changeAccessCode();return false;}
   const cfg=CLARA_ACCESS_CODES[currentAccess.code];
   if(!cfg){alert('访问码已失效，请重新输入。');changeAccessCode();return false;}
-  const type=accessLearningType(cfg);
+  const type=chooseLearningSessionType(cfg);
+  if(!type){
+    alert('学习次数已用完，请联系 Clara 老师续费或更换访问码。');
+    updateAccessBadge();
+    return false;
+  }
   const limit=quotaLimit(cfg,type);
   const used=quotaUsed(currentAccess.code,type);
   if(limit!=null&&used>=limit){
@@ -605,8 +622,11 @@ function consumeLearningSession(newCount,lesson){
   const remain=limit==null?'不限':Math.max(0,limit-used-1);
   lesson.learningSessions=Array.isArray(lesson.learningSessions)?lesson.learningSessions:[];
   lesson.learningSessions.push({type,newCount,at:new Date().toISOString()});
+  lesson.learningAccessType=type;
+  lesson.fullFeaturesUnlocked=type==='premium';
   updateAccessBadge();
-  alert(`已开始 1 次${quotaName(type)}：本次新增 ${newCount} 个单词，剩余 ${remain} 次。`);
+  const extra=type==='basic'&&accessHasFullFeatures(cfg)?'全功能次数已用完，本组词将按基础功能继续学习。':'';
+  alert(`已开始 1 次${quotaName(type)}：本次新增 ${newCount} 个单词，剩余 ${remain} 次。${extra}`);
   return true;
 }
 function ensurePremiumSession(feature){
@@ -621,15 +641,20 @@ function ensurePremiumSession(feature){
 function featureUnlocked(feature){
   if(teacherMode())return true;
   if(!LOCKED_FEATURES[feature])return true;
-  return !!(currentAccess&&Array.isArray(currentAccess.features)&&currentAccess.features.includes(feature));
+  if(!(currentAccess&&Array.isArray(currentAccess.features)&&currentAccess.features.includes(feature))) return false;
+  const l=getActive();
+  if(!l) return false;
+  if(l.fullFeaturesUnlocked||l.learningAccessType==='premium') return true;
+  if(!l.learningAccessType&&!Object.prototype.hasOwnProperty.call(l,'fullFeaturesUnlocked')) return true;
+  return false;
 }
 function lockedHtml(feature,reason='locked'){
   const msg=reason==='quota'
-    ? '这个访问码的全功能次数已经用完。请联系 Clara 老师续费或更换访问码。'
-    : '该功能已为学员准备好。开通后即可使用，请联系 Clara 老师升级权限。';
+    ? '全功能次数已经用完，但基础功能仍可继续使用。需要卡片、音拼、默写、极速配或小语篇时，请联系 Clara 老师续费或更换全功能访问码。'
+    : '当前这组词是基础学习，只开放录入、跟读、听说、薄弱词仓、句子等基础功能。开通全功能后可使用本模块。';
   return `<div class="locked-card">
     <div class="lock-icon">🔒</div>
-    <h3>${escHtml(LOCKED_FEATURES[feature]||'该功能')}暂未开通</h3>
+    <h3>${escHtml(LOCKED_FEATURES[feature]||'该功能')}暂不可用</h3>
     <p>${escHtml(msg)}</p>
     <button class="btn btn-outline" onclick="changeAccessCode()">更换访问码</button>
     <button class="btn btn-outline" onclick="showPanel('manage')">先返回录入单词</button>
@@ -880,18 +905,33 @@ function saveWords() {
   const l = getActive(); if(!l) return;
   const oldByEn = new Map((l.words||[]).map(w=>[normalizeAnswer(w.en), w]));
   const rows=getCurrentRows().filter(w=>w.en);
+  if(!rows.length){alert('请至少填写一个英文单词后再保存。');return;}
   const newKeys=new Set();
   rows.forEach(w=>{
     const key=normalizeAnswer(w.en);
     if(key&&!oldByEn.has(key)) newKeys.add(key);
   });
   const newCount=newKeys.size;
+  const hadSavedBefore=!!l.wordsSavedOnce||oldByEn.size>0;
+  const firstSave=!hadSavedBefore;
+  const addingAfterSaved=hadSavedBefore&&newCount>0;
+  if(firstSave){
+    const ok=confirm(`确认保存本组 ${rows.length} 个单词吗？\n\n保存前可以继续补漏词；一旦点击保存，本组词表就会锁定为一次学习。\n之后如果再新增英文单词，会按“新一组词/新课时”重新消耗一次学习次数。`);
+    if(!ok) return;
+  }
+  if(addingAfterSaved){
+    const ok=confirm(`检测到你新增了 ${newCount} 个英文单词。\n\n本课时已经保存过，所以这次新增会视为“新一组词/新课时”，并消耗一次学习次数。确认继续保存吗？`);
+    if(!ok) return;
+  }
   if(newCount&&!consumeLearningSession(newCount,l)) return;
   l.words = rows.map(w=>{
     const old=oldByEn.get(normalizeAnswer(w.en));
     return old ? {...old, ...w} : w;
   });
   if(newCount) resetGenerationForNewWordSet(l);
+  l.wordsSavedOnce=true;
+  l.savedWordSignature=wordSetSignature(l.words);
+  l.lastSavedAt=new Date().toISOString();
   save(); renderLessons();
 }
 function wordSetSignature(words){
