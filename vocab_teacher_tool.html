@@ -236,9 +236,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .save-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;padding:10px 20px;border-radius:30px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:999}
 .save-toast.show{opacity:1}
 .access-overlay{position:fixed;inset:0;background:rgba(250,249,246,.96);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px}
-.access-card{width:min(420px,100%);background:#fff;border:1.5px solid var(--border);border-radius:18px;padding:24px;box-shadow:0 18px 60px rgba(0,0,0,.14)}
+.access-card{width:min(420px,100%);background:#fff;border:1.5px solid var(--border);border-radius:18px;padding:24px;box-shadow:0 18px 60px rgba(0,0,0,.14);position:relative}
 .access-title{font-size:22px;font-weight:900;margin-bottom:8px;color:var(--text)}
 .access-sub{font-size:13px;color:var(--text-3);line-height:1.7;margin-bottom:16px}
+.access-close{position:absolute;right:14px;top:12px;border:none;background:transparent;color:var(--text-3);font-size:22px;line-height:1;cursor:pointer;padding:4px}
+.access-close:hover{color:var(--text)}
+.access-summary{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:12px;display:none}
 .access-card input{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:13px 14px;font-size:18px;font-weight:800;letter-spacing:.04em;text-align:center;text-transform:uppercase;outline:none}
 .access-card input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
 .access-error{font-size:13px;color:var(--red);min-height:20px;margin-top:8px}
@@ -292,7 +295,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
     <button class="nav-tab" onclick="showPanel('story')" id="tab-story">📖 Clara 小语篇</button>
     <button class="nav-tab" onclick="showPanel('report')" id="tab-report">📊 学习战报</button>
   </div>
-  <button class="lesson-badge" id="access-badge" onclick="changeAccessCode()" style="border:none;cursor:pointer">访问码</button>
+  <button class="lesson-badge" id="access-badge" onclick="openAccessPanel()" style="border:none;cursor:pointer">访问码</button>
   <div class="lesson-badge" id="active-badge">未选课时</div>
 </nav>
 
@@ -437,13 +440,16 @@ exercise  /ˈeksəsaɪz/  n./v. 锻炼</pre>
 <div class="save-toast" id="toast">✅ 已保存</div>
 <div class="access-overlay" id="access-overlay" style="display:none">
   <div class="access-card">
+    <button class="access-close" id="access-close" onclick="closeAccessPanel()" style="display:none">×</button>
     <div class="access-title">Clara词研堂 学员访问</div>
     <div class="access-sub">请输入老师提供的访问码。未开通的功能会显示锁定状态，可联系老师开通。</div>
+    <div class="access-summary" id="access-summary"></div>
     <input id="access-code-input" placeholder="输入访问码" autocomplete="one-time-code">
     <div class="access-error" id="access-error"></div>
     <div class="access-mini">输入访问码不扣次数；保存一批新单词才算开始 1 次学习。已有课时只改中文/例句不扣，新加入英文词条会扣 1 次。</div>
     <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
-      <button class="btn btn-primary" onclick="submitAccessCode()">进入学习</button>
+      <button class="btn btn-primary" id="access-submit-btn" onclick="submitAccessCode()">进入学习</button>
+      <button class="btn btn-outline" id="access-switch-btn" onclick="beginChangeAccessCode()" style="display:none">更换访问码</button>
     </div>
   </div>
 </div>
@@ -467,9 +473,9 @@ const CLARA_SITE_AI = {
   hideSettingsForStudents: true   // 设为 true：学生看不到 AI 设置和 Key
 };
 // ─── 访问码配置区（前端实用版，可防普通用户，不是真正后端加密）───
-// basicLimit：基础学习次数（null 表示不限）；premiumLimit：全功能学习次数
+// basicLimit：基础学习次数（null 表示不限）；premiumLimit：全功能学习次数；premiumResetDays：几天重置一次，不累计
 const CLARA_ACCESS_CODES = {
-  'CLARA2026': {name:'正式学员', expires:'2027-12-31', basicLimit:null, premiumLimit:3, features:['browse','spell','dictation','game','story']},
+  'CLARA2026': {name:'正式学员', expires:'2027-12-31', basicLimit:null, premiumLimit:3, premiumResetDays:7, features:['browse','spell','dictation','game','story']},
   'DEMO2026': {name:'体验学员', expires:'2027-12-31', basicLimit:2, premiumLimit:1, features:['browse','spell','dictation','game','story']}
 };
 const LOCKED_FEATURES = {
@@ -556,11 +562,35 @@ function accessStillValid(access){
 function initAccessGate(){
   loadAccess();
   const overlay=document.getElementById('access-overlay');
-  if(!currentAccess&&overlay){overlay.style.display='flex';}
+  if(!currentAccess&&overlay){openAccessPanel(true);}
   updateFeatureLocks();
   updateAccessBadge();
   const input=document.getElementById('access-code-input');
   input?.addEventListener('keydown',e=>{if(e.key==='Enter')submitAccessCode();});
+}
+function quotaResetDays(cfg,type){return type==='basic'?(cfg?.basicResetDays||0):(cfg?.premiumResetDays||0);}
+function readQuotaState(code,type){
+  const raw=localStorage.getItem(quotaKey(code,type));
+  if(!raw) return null;
+  try{
+    const parsed=JSON.parse(raw);
+    if(parsed&&typeof parsed==='object') return parsed;
+  }catch(e){}
+  return {used:parseInt(raw||'0',10)||0,periodStart:''};
+}
+function normalizeQuotaState(code,type,cfg){
+  const days=quotaResetDays(cfg,type);
+  let state=readQuotaState(code,type)||{used:0,periodStart:''};
+  if(!days) return {used:Math.max(0,parseInt(state.used||0,10)||0),periodStart:state.periodStart||''};
+  const now=Date.now();
+  if(!state.periodStart) return {used:0,periodStart:''};
+  const start=new Date(state.periodStart).getTime();
+  if(Number.isNaN(start)||now-start>=days*86400000){
+    state={used:0,periodStart:new Date().toISOString()};
+    localStorage.setItem(quotaKey(code,type),JSON.stringify(state));
+  }
+  state.used=Math.max(0,parseInt(state.used||0,10)||0);
+  return state;
 }
 function submitAccessCode(){
   const input=document.getElementById('access-code-input');
@@ -577,8 +607,33 @@ function submitAccessCode(){
   showPanel('manage');
 }
 function quotaKey(code,type){return `clara_quota_${code}_${type}`;}
-function quotaUsed(code,type){return parseInt(localStorage.getItem(quotaKey(code,type))||'0',10)||0;}
-function setQuotaUsed(code,type,value){localStorage.setItem(quotaKey(code,type),String(Math.max(0,parseInt(value||0,10)||0)));}
+function quotaUsed(code,type){
+  const cfg=CLARA_ACCESS_CODES[code]||{};
+  return normalizeQuotaState(code,type,cfg).used;
+}
+function setQuotaUsed(code,type,value){
+  const cfg=CLARA_ACCESS_CODES[code]||{};
+  const days=quotaResetDays(cfg,type);
+  const state=normalizeQuotaState(code,type,cfg);
+  state.used=Math.max(0,parseInt(value||0,10)||0);
+  if(days&&!state.periodStart) state.periodStart=new Date().toISOString();
+  if(days) localStorage.setItem(quotaKey(code,type),JSON.stringify(state));
+  else localStorage.setItem(quotaKey(code,type),String(state.used));
+}
+function quotaExportState(code,type){
+  const cfg=CLARA_ACCESS_CODES[code]||{};
+  const state=normalizeQuotaState(code,type,cfg);
+  return quotaResetDays(cfg,type)?state:state.used;
+}
+function restoreQuotaState(code,type,value){
+  const cfg=CLARA_ACCESS_CODES[code]||{};
+  if(value&&typeof value==='object'){
+    const state={used:Math.max(0,parseInt(value.used||0,10)||0),periodStart:value.periodStart||new Date().toISOString()};
+    localStorage.setItem(quotaKey(code,type),quotaResetDays(cfg,type)?JSON.stringify(state):String(state.used));
+  }else{
+    setQuotaUsed(code,type,value);
+  }
+}
 function quotaLimit(cfg,type){return type==='basic'?cfg.basicLimit:cfg.premiumLimit;}
 function accessHasFullFeatures(cfg){
   const features=cfg?.features||[];
@@ -618,7 +673,7 @@ function consumeLearningSession(newCount,lesson){
     updateAccessBadge();
     return false;
   }
-  localStorage.setItem(quotaKey(currentAccess.code,type),String(used+1));
+  setQuotaUsed(currentAccess.code,type,used+1);
   const remain=limit==null?'不限':Math.max(0,limit-used-1);
   lesson.learningSessions=Array.isArray(lesson.learningSessions)?lesson.learningSessions:[];
   lesson.learningSessions.push({type,newCount,at:new Date().toISOString()});
@@ -656,7 +711,7 @@ function lockedHtml(feature,reason='locked'){
     <div class="lock-icon">🔒</div>
     <h3>${escHtml(LOCKED_FEATURES[feature]||'该功能')}暂不可用</h3>
     <p>${escHtml(msg)}</p>
-    <button class="btn btn-outline" onclick="changeAccessCode()">更换访问码</button>
+    <button class="btn btn-outline" onclick="openAccessPanel()">查看/更换访问码</button>
     <button class="btn btn-outline" onclick="showPanel('manage')">先返回录入单词</button>
   </div>`;
 }
@@ -666,17 +721,55 @@ function updateFeatureLocks(){
     if(tab)tab.classList.toggle('locked',!featureUnlocked(f));
   });
 }
-function changeAccessCode(){
+function accessSummaryHtml(){
+  if(!currentAccess) return '';
+  const cfg=CLARA_ACCESS_CODES[currentAccess.code]||{};
+  const basicRemain=cfg.basicLimit==null?'不限':quotaRemaining(currentAccess.code,'basic',cfg);
+  const premiumRemain=cfg.premiumLimit==null?'不限':quotaRemaining(currentAccess.code,'premium',cfg);
+  let period='';
+  if(cfg.premiumResetDays){
+    const state=normalizeQuotaState(currentAccess.code,'premium',cfg);
+    if(state.periodStart){
+      const next=new Date(new Date(state.periodStart).getTime()+cfg.premiumResetDays*86400000);
+      period=`<br>全功能每 ${cfg.premiumResetDays} 天重置为 ${cfg.premiumLimit} 次，下次重置：${next.toLocaleDateString()}`;
+    }else{
+      period=`<br>全功能每 ${cfg.premiumResetDays} 天重置为 ${cfg.premiumLimit} 次，首次使用全功能后开始计算周期。`;
+    }
+  }
+  return `<b>${escHtml(currentAccess.name||'学员')}</b><br>基础功能剩余：${basicRemain}；全功能剩余：${premiumRemain}${period}`;
+}
+function openAccessPanel(required=false){
+  const overlay=document.getElementById('access-overlay');if(!overlay)return;
+  overlay.style.display='flex';
+  const close=document.getElementById('access-close');
+  const summary=document.getElementById('access-summary');
+  const input=document.getElementById('access-code-input');
+  const switchBtn=document.getElementById('access-switch-btn');
+  const submitBtn=document.getElementById('access-submit-btn');
+  const err=document.getElementById('access-error');if(err)err.textContent='';
+  const logged=!!currentAccess&&!required;
+  if(close) close.style.display=logged?'block':'none';
+  if(summary){summary.style.display=logged?'block':'none';summary.innerHTML=logged?accessSummaryHtml():'';}
+  if(input){input.style.display=logged?'none':'block';input.value='';if(!logged)setTimeout(()=>input.focus(),80);}
+  if(submitBtn) submitBtn.style.display=logged?'none':'inline-flex';
+  if(switchBtn) switchBtn.style.display=logged?'inline-flex':'none';
+}
+function closeAccessPanel(){
+  if(!currentAccess) return;
+  const overlay=document.getElementById('access-overlay');
+  if(overlay) overlay.style.display='none';
+}
+function beginChangeAccessCode(){
   localStorage.removeItem('clara_access');
   currentAccess=null;
-  const overlay=document.getElementById('access-overlay');
-  if(overlay)overlay.style.display='flex';
+  openAccessPanel(true);
   const input=document.getElementById('access-code-input');
-  if(input){input.value='';setTimeout(()=>input.focus(),80);}
+  if(input){input.style.display='block';input.value='';setTimeout(()=>input.focus(),80);}
   const err=document.getElementById('access-error');if(err)err.textContent='';
   updateFeatureLocks();
   updateAccessBadge();
 }
+function changeAccessCode(){beginChangeAccessCode();}
 function updateAccessBadge(){
   const el=document.getElementById('access-badge');if(!el)return;
   if(teacherMode()){el.textContent='老师模式';return;}
@@ -696,7 +789,7 @@ function accessSnapshot(){
   }:null;
   const quotas={};
   Object.keys(CLARA_ACCESS_CODES).forEach(code=>{
-    quotas[code]={basic:quotaUsed(code,'basic'),premium:quotaUsed(code,'premium')};
+    quotas[code]={basic:quotaExportState(code,'basic'),premium:quotaExportState(code,'premium')};
   });
   return {access,quotas};
 }
@@ -719,8 +812,8 @@ function restoreAccessSnapshot(snapshot){
   if(snapshot.quotas&&typeof snapshot.quotas==='object'){
     Object.keys(snapshot.quotas).forEach(code=>{
       if(!CLARA_ACCESS_CODES[code]) return;
-      setQuotaUsed(code,'basic',snapshot.quotas[code].basic);
-      setQuotaUsed(code,'premium',snapshot.quotas[code].premium);
+      restoreQuotaState(code,'basic',snapshot.quotas[code].basic);
+      restoreQuotaState(code,'premium',snapshot.quotas[code].premium);
     });
   }
   updateFeatureLocks();
