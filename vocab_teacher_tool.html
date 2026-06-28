@@ -428,6 +428,7 @@ let dictIdx = 0;
 let dictChecked = false;
 let dictAuto = false;
 let dictAutoTimer = null;
+let dictAdvanceTimer = null;
 let dictInterval = 12000;
 let studyStats = null;
 let gameState = null;
@@ -875,11 +876,14 @@ function maskWord(text){
   return listenShowWord ? text : '••••••';
 }
 function listenToggleWord(){listenShowWord=document.getElementById('listen-show-word')?.checked||false;renderListen();}
-function listenSpeak(){
+function listenSpeak(cb){
   const l=getActive();if(!l)return;
   const btn=document.getElementById('listen-speak-btn');
   if(btn){btn.classList.add('speaking');btn.textContent='🔊 播放中...';}
-  speakEN(l.words[listenIdx].en,()=>{if(btn){btn.classList.remove('speaking');btn.textContent='🔊 播放英文';}});
+  speakEN(l.words[listenIdx].en,()=>{
+    if(btn){btn.classList.remove('speaking');btn.textContent='🔊 播放英文';}
+    if(cb)cb();
+  });
 }
 function listenSpeakZh(){const l=getActive();if(!l)return;speakZH(l.words[listenIdx].zh||'');}
 function listenReveal(){listenAnswerShown=true;document.getElementById('listen-answer')?.classList.add('show');}
@@ -898,7 +902,13 @@ function listenNext(){
   renderListen();
   if(listenAuto) listenAutoSchedule(); else listenSpeak();
 }
-function listenPrev(){clearTimeout(listenAutoTimer);listenAnswerShown=false;listenIdx=(listenIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);renderListen();if(listenAuto)listenAutoSchedule();}
+function listenPrev(){
+  clearTimeout(listenAutoTimer);
+  listenAnswerShown=false;
+  listenIdx=(listenIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);
+  renderListen();
+  if(listenAuto) listenAutoSchedule(); else listenSpeak();
+}
 function listenSetInterval(){listenInterval=parseInt(document.getElementById('listen-interval')?.value||7000);}
 function listenToggleAuto(){
   listenAuto=document.getElementById('listen-auto')?.checked||false;
@@ -919,14 +929,19 @@ function listenAutoSchedule(){
   speakEN(l.words[listenIdx].en,()=>{
     if(btn){btn.classList.remove('speaking');btn.textContent='🔊 播放英文';}
     if(!listenAuto)return;
-    listenAutoTimer=setTimeout(()=>{
-      if(!listenAuto)return;
-      listenAnswerShown=false;
-      listenIdx=(listenIdx+1)%(getActive()?.words.length||1);
-      renderListen();
-      if(listenAuto)listenAutoSchedule();
-    },listenInterval);
+    listenReveal();
+    listenAutoScheduleAfterReveal();
   });
+}
+function listenAutoScheduleAfterReveal(){
+  clearTimeout(listenAutoTimer);
+  listenAutoTimer=setTimeout(()=>{
+    if(!listenAuto)return;
+    listenAnswerShown=false;
+    listenIdx=(listenIdx+1)%(getActive()?.words.length||1);
+    renderListen();
+    if(listenAuto)listenAutoSchedule();
+  },listenInterval);
 }
 
 // ─── DICTATION MODE ───
@@ -940,7 +955,7 @@ function renderDictation(){
     <div class="read-wrap">
       <div class="practice-card">
         <div class="practice-kicker">DICTATION</div>
-        <div class="practice-prompt">听发音，拼写英文单词或词组</div>
+        <div class="practice-prompt">听发音，拼写英文单词或词组，输入够长度后自动判断</div>
         <div class="hint-chip">${escHtml(w.zh||'未填写中文')}</div>
         <div style="height:16px"></div>
         <input class="dict-input" id="dict-input" autocomplete="off" spellcheck="false" placeholder="输入英文拼写">
@@ -948,7 +963,6 @@ function renderDictation(){
       </div>
       <div class="practice-actions">
         <button class="speak-btn" id="dict-speak-btn" onclick="dictSpeak()">🔊 播放英文</button>
-        <button class="nav-btn" onclick="dictCheck()">检查</button>
         <button class="nav-btn" onclick="dictHint()">提示</button>
         <button class="nav-btn" onclick="dictReveal()">显示答案</button>
       </div>
@@ -968,10 +982,14 @@ function renderDictation(){
       </div>
     </div>`;
   const inp=document.getElementById('dict-input');
-  inp?.addEventListener('keydown',e=>{if(e.key==='Enter'){dictChecked?dictNext():dictCheck();}});
+  if(inp){
+    inp.addEventListener('input',dictMaybeAutoCheck);
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter')dictNext();});
+  }
   setTimeout(()=>{inp?.focus();if(!dictAuto)dictSpeak();},120);
 }
 function normalizeAnswer(s){return(s||'').toLowerCase().replace(/[’']/g,'').replace(/[-_]+/g,' ').replace(/[.,!?;:]/g,'').replace(/\s+/g,' ').trim();}
+function answerLetterCount(s){return normalizeAnswer(s).replace(/\s/g,'').length;}
 function dictSpeak(){
   const l=getActive();if(!l)return;
   const btn=document.getElementById('dict-speak-btn');
@@ -984,7 +1002,7 @@ function dictCheck(){
   const input=document.getElementById('dict-input');
   const fb=document.getElementById('dict-feedback');
   const ok=normalizeAnswer(input?.value)===normalizeAnswer(w.en);
-  dictChecked=ok;
+  dictChecked=true;
   if(input) input.dataset.graded='1';
   recordStudy('dictation',ok,w);
   if(!ok) markWeak(w,'听写错误'); else if((w.weakCount||0)>0) w.weakCount=Math.max(0,(w.weakCount||0)-1);
@@ -993,6 +1011,17 @@ function dictCheck(){
   input?.classList.toggle('wrong',!ok);
   if(fb){fb.className='feedback '+(ok?'ok':'bad');fb.textContent=ok?'正确！可以进入下一个。':'再听一遍，注意拼写和空格。';}
   if(ok) speakEN(w.en);
+  return ok;
+}
+function dictMaybeAutoCheck(){
+  const l=getActive();if(!l||dictChecked)return;
+  const input=document.getElementById('dict-input');
+  const val=String(input?.value||'');
+  if(answerLetterCount(val)<answerLetterCount(l.words[dictIdx].en)) return;
+  const ok=dictCheck();
+  clearTimeout(dictAutoTimer);
+  clearTimeout(dictAdvanceTimer);
+  dictAdvanceTimer=setTimeout(()=>dictNext(true),ok?700:1200);
 }
 function dictHint(){
   const l=getActive();if(!l)return;
@@ -1016,25 +1045,15 @@ function dictReveal(){
   speakEN(l.words[dictIdx].en);
 }
 function dictNext(){
-  if(!dictAuto && !dictCanLeaveManual()) return;
-  dictGradeBeforeLeave(dictAuto?'听写超时未填写':'听写错误');
+  dictGradeBeforeLeave('听写未填写');
   clearTimeout(dictAutoTimer);
+  clearTimeout(dictAdvanceTimer);
   dictChecked=false;
   dictIdx=(dictIdx+1)%(getActive()?.words.length||1);
   renderDictation();
   if(dictAuto)dictAutoSchedule();
 }
-function dictPrev(){clearTimeout(dictAutoTimer);dictChecked=false;dictIdx=(dictIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);renderDictation();if(dictAuto)dictAutoSchedule();}
-function dictCanLeaveManual(){
-  const input=document.getElementById('dict-input');
-  const fb=document.getElementById('dict-feedback');
-  if(!String(input?.value||'').trim()){
-    if(fb){fb.className='feedback bad';fb.textContent='请先填写英文，再进入下一个。';}
-    input?.focus();
-    return false;
-  }
-  return true;
-}
+function dictPrev(){clearTimeout(dictAutoTimer);clearTimeout(dictAdvanceTimer);dictChecked=false;dictIdx=(dictIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);renderDictation();if(dictAuto)dictAutoSchedule();}
 function dictGradeBeforeLeave(blankReason){
   const l=getActive();if(!l)return;
   const w=l.words[dictIdx];
@@ -1061,6 +1080,7 @@ function dictStopAuto(){
   dictAuto=false;
   const cb=document.getElementById('dict-auto');if(cb)cb.checked=false;
   clearTimeout(dictAutoTimer);
+  clearTimeout(dictAdvanceTimer);
   window.speechSynthesis?.cancel();
 }
 function dictAutoSchedule(){
