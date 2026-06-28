@@ -423,6 +423,7 @@ let listenAnswerShown = false;
 let listenShowWord = false;
 let listenAuto = false;
 let listenAutoTimer = null;
+let listenAdvanceTimer = null;
 let listenInterval = 7000;
 let dictIdx = 0;
 let dictChecked = false;
@@ -781,10 +782,6 @@ function renderReadWord() {
         </div>`:'<div class="read-sentence"></div>'}
       </div>
       <button class="speak-btn" id="rw-speak-btn" onclick="rwSpeak()">🔊 朗读发音</button>
-      <div class="practice-actions">
-        <button class="nav-btn" onclick="rwMark(true)">已掌握</button>
-        <button class="nav-btn" onclick="rwMark(false)">需复习</button>
-      </div>
       <div class="nav-row">
         <button class="nav-btn" onclick="rwPrev()">← 上一个</button>
         <span class="prog-label">${readIdx+1} / ${l.words.length}</span>
@@ -825,14 +822,6 @@ function rwSpeakSchedule(){clearTimeout(autoTimer);rwSpeak(()=>{if(!autoActive)r
 function rwSetInterval(){rwInterval=parseInt(document.getElementById('rw-interval')?.value||5000);}
 function rwToggleAuto(){autoActive=document.getElementById('rw-auto')?.checked;rwSetInterval();if(autoActive)rwSpeakSchedule();else rwStop();}
 function rwStop(){autoActive=false;const cb=document.getElementById('rw-auto');if(cb)cb.checked=false;clearTimeout(autoTimer);if(window.speechSynthesis)window.speechSynthesis.cancel();const btn=document.getElementById('rw-speak-btn');resetSpeakBtn(btn);}
-function rwMark(ok){
-  const l=getActive(); if(!l) return;
-  const w=l.words[readIdx];
-  recordStudy('read',ok,w);
-  ok ? clearWeak(w) : markWeak(w,'跟读需复习');
-  save();
-  renderReadWord();
-}
 
 // ─── LISTEN SPEAK MODE ───
 function renderListen(){
@@ -897,15 +886,27 @@ function listenMark(ok){
 }
 function listenNext(){
   clearTimeout(listenAutoTimer);
-  listenAnswerShown=false;
-  listenIdx=(listenIdx+1)%(getActive()?.words.length||1);
-  renderListen();
-  if(listenAuto) listenAutoSchedule(); else listenSpeak();
+  clearTimeout(listenAdvanceTimer);
+  if(!listenAnswerShown){
+    listenReveal();
+    listenAdvanceTimer=setTimeout(listenAdvanceNext,1200);
+    return;
+  }
+  listenAdvanceNext();
 }
 function listenPrev(){
   clearTimeout(listenAutoTimer);
+  clearTimeout(listenAdvanceTimer);
   listenAnswerShown=false;
   listenIdx=(listenIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);
+  renderListen();
+  if(listenAuto) listenAutoSchedule(); else listenSpeak();
+}
+function listenAdvanceNext(){
+  clearTimeout(listenAutoTimer);
+  clearTimeout(listenAdvanceTimer);
+  listenAnswerShown=false;
+  listenIdx=(listenIdx+1)%(getActive()?.words.length||1);
   renderListen();
   if(listenAuto) listenAutoSchedule(); else listenSpeak();
 }
@@ -919,6 +920,7 @@ function listenStopAuto(){
   listenAuto=false;
   const cb=document.getElementById('listen-auto');if(cb)cb.checked=false;
   clearTimeout(listenAutoTimer);
+  clearTimeout(listenAdvanceTimer);
   window.speechSynthesis?.cancel();
 }
 function listenAutoSchedule(){
@@ -937,10 +939,7 @@ function listenAutoScheduleAfterReveal(){
   clearTimeout(listenAutoTimer);
   listenAutoTimer=setTimeout(()=>{
     if(!listenAuto)return;
-    listenAnswerShown=false;
-    listenIdx=(listenIdx+1)%(getActive()?.words.length||1);
-    renderListen();
-    if(listenAuto)listenAutoSchedule();
+    listenAdvanceNext();
   },listenInterval);
 }
 
@@ -1000,17 +999,13 @@ function dictCheck(){
   const l=getActive();if(!l)return;
   const w=l.words[dictIdx];
   const input=document.getElementById('dict-input');
-  const fb=document.getElementById('dict-feedback');
   const ok=normalizeAnswer(input?.value)===normalizeAnswer(w.en);
   dictChecked=true;
   if(input) input.dataset.graded='1';
   recordStudy('dictation',ok,w);
   if(!ok) markWeak(w,'听写错误'); else if((w.weakCount||0)>0) w.weakCount=Math.max(0,(w.weakCount||0)-1);
   save();
-  input?.classList.toggle('correct',ok);
-  input?.classList.toggle('wrong',!ok);
-  if(fb){fb.className='feedback '+(ok?'ok':'bad');fb.textContent=ok?'正确！可以进入下一个。':'再听一遍，注意拼写和空格。';}
-  if(ok) speakEN(w.en);
+  dictShowAnswer(ok, ok?'正确':'听写错误');
   return ok;
 }
 function dictMaybeAutoCheck(){
@@ -1036,29 +1031,32 @@ function dictReveal(){
   markWeak(w,'查看听写答案');
   recordStudy('dictation',false,w);
   save();
-  const input=document.getElementById('dict-input');
-  if(input){input.value=l.words[dictIdx].en;input.classList.remove('wrong');input.classList.add('correct');}
-  if(input) input.dataset.graded='1';
-  const fb=document.getElementById('dict-feedback');
-  if(fb){fb.className='feedback ok';fb.textContent='答案已显示，跟读一遍再继续。';}
   dictChecked=true;
+  const input=document.getElementById('dict-input');
+  if(input) input.dataset.graded='1';
+  dictShowAnswer(false,'查看听写答案');
   speakEN(l.words[dictIdx].en);
 }
 function dictNext(){
-  dictGradeBeforeLeave('听写未填写');
   clearTimeout(dictAutoTimer);
   clearTimeout(dictAdvanceTimer);
-  dictChecked=false;
-  dictIdx=(dictIdx+1)%(getActive()?.words.length||1);
-  renderDictation();
-  if(dictAuto)dictAutoSchedule();
+  const input=document.getElementById('dict-input');
+  if(input?.dataset.answerShown==='1'){
+    dictAdvanceNow();
+    return;
+  }
+  dictGradeBeforeLeave('听写未填写');
+  dictAdvanceTimer=setTimeout(dictAdvanceNow,1300);
 }
 function dictPrev(){clearTimeout(dictAutoTimer);clearTimeout(dictAdvanceTimer);dictChecked=false;dictIdx=(dictIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);renderDictation();if(dictAuto)dictAutoSchedule();}
 function dictGradeBeforeLeave(blankReason){
   const l=getActive();if(!l)return;
   const w=l.words[dictIdx];
   const input=document.getElementById('dict-input');
-  if(input?.dataset.graded==='1') return;
+  if(input?.dataset.graded==='1'){
+    dictShowAnswer(normalizeAnswer(input.value)===normalizeAnswer(w.en),'已检查');
+    return;
+  }
   const val=String(input?.value||'').trim();
   const ok=val && normalizeAnswer(val)===normalizeAnswer(w.en);
   recordStudy('dictation',!!ok,w);
@@ -1069,6 +1067,33 @@ function dictGradeBeforeLeave(blankReason){
   }
   if(input) input.dataset.graded='1';
   save();
+  dictChecked=true;
+  dictShowAnswer(!!ok,ok?'正确':(val?'听写错误':blankReason));
+}
+function dictShowAnswer(ok,reason){
+  const l=getActive();if(!l)return;
+  const w=l.words[dictIdx];
+  const input=document.getElementById('dict-input');
+  const fb=document.getElementById('dict-feedback');
+  if(input){
+    input.value=w.en;
+    input.readOnly=true;
+    input.dataset.answerShown='1';
+    input.classList.toggle('correct',!!ok);
+    input.classList.toggle('wrong',!ok);
+  }
+  if(fb){
+    fb.className='feedback '+(ok?'ok':'bad');
+    fb.textContent=ok?`正确答案：${w.en}`:`正确答案：${w.en}（${reason||'需复习'}）`;
+  }
+}
+function dictAdvanceNow(){
+  clearTimeout(dictAutoTimer);
+  clearTimeout(dictAdvanceTimer);
+  dictChecked=false;
+  dictIdx=(dictIdx+1)%(getActive()?.words.length||1);
+  renderDictation();
+  if(dictAuto)dictAutoSchedule();
 }
 function dictSetInterval(){dictInterval=parseInt(document.getElementById('dict-interval')?.value||12000);}
 function dictToggleAuto(){
@@ -1094,10 +1119,7 @@ function dictAutoSchedule(){
     dictAutoTimer=setTimeout(()=>{
       if(!dictAuto)return;
       dictGradeBeforeLeave('听写超时未填写');
-      dictChecked=false;
-      dictIdx=(dictIdx+1)%(getActive()?.words.length||1);
-      renderDictation();
-      if(dictAuto)dictAutoSchedule();
+      dictAdvanceTimer=setTimeout(dictAdvanceNow,1300);
     },dictInterval);
   });
 }
