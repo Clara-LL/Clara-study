@@ -441,7 +441,7 @@ exercise  /ˈeksəsaɪz/  n./v. 锻炼</pre>
     <div class="access-sub">请输入老师提供的访问码。未开通的功能会显示锁定状态，可联系老师开通。</div>
     <input id="access-code-input" placeholder="输入访问码" autocomplete="one-time-code">
     <div class="access-error" id="access-error"></div>
-    <div class="access-mini">基础功能进入网页即算 1 次；第一次使用付费功能才算 1 次全功能会话。本次打开网页内重复练习不重复扣次数。</div>
+    <div class="access-mini">输入访问码不扣次数；保存一批新单词才算开始 1 次学习。已有课时只改中文/例句不扣，新加入英文词条会扣 1 次。</div>
     <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
       <button class="btn btn-primary" onclick="submitAccessCode()">进入学习</button>
     </div>
@@ -467,7 +467,7 @@ const CLARA_SITE_AI = {
   hideSettingsForStudents: true   // 设为 true：学生看不到 AI 设置和 Key
 };
 // ─── 访问码配置区（前端实用版，可防普通用户，不是真正后端加密）───
-// basicLimit：基础会话次数（null 表示不限）；premiumLimit：全功能会话次数
+// basicLimit：基础学习次数（null 表示不限）；premiumLimit：全功能学习次数
 const CLARA_ACCESS_CODES = {
   'CLARA2026': {name:'正式学员', expires:'2027-12-31', basicLimit:null, premiumLimit:3, features:['browse','spell','dictation','game','story']},
   'DEMO2026': {name:'体验学员', expires:'2027-12-31', basicLimit:2, premiumLimit:1, features:['browse','spell','dictation','game','story']}
@@ -479,6 +479,7 @@ const LOCKED_FEATURES = {
   game:'极速配',
   story:'Clara 小语篇'
 };
+const ARCHIVE_SIGN_SALT='ClaraCiYanTang_2026_archive_guard_v3';
 let currentAccess = null;
 let lessons = [];
 let activeLessonId = null;
@@ -516,6 +517,7 @@ let studyStats = null;
 let gameState = null;
 let gameTimer = null;
 let weakPractice = null;
+const SLOT_INPUT_SUPPORTS_BEFOREINPUT = typeof InputEvent !== 'undefined';
 
 function load() {
   try { lessons = JSON.parse(localStorage.getItem('vocab_lessons') || '[]'); } catch(e){ lessons=[]; }
@@ -567,7 +569,6 @@ function submitAccessCode(){
   const cfg=CLARA_ACCESS_CODES[code];
   if(!cfg){if(err)err.textContent='访问码不正确，请联系老师确认。';return;}
   if(cfg.expires&&new Date(cfg.expires+'T23:59:59')<new Date()){if(err)err.textContent='访问码已到期，请联系老师续费。';return;}
-  if(!consumeBasicSession(code,cfg)){if(err)err.textContent='基础功能使用次数已用完，请联系老师续费或更换访问码。';return;}
   currentAccess={code,name:cfg.name||'学员',features:cfg.features||[],expires:cfg.expires||'',activatedAt:new Date().toISOString(),premiumSession:false};
   localStorage.setItem('clara_access',JSON.stringify(currentAccess));
   document.getElementById('access-overlay').style.display='none';
@@ -577,28 +578,44 @@ function submitAccessCode(){
 }
 function quotaKey(code,type){return `clara_quota_${code}_${type}`;}
 function quotaUsed(code,type){return parseInt(localStorage.getItem(quotaKey(code,type))||'0',10)||0;}
+function setQuotaUsed(code,type,value){localStorage.setItem(quotaKey(code,type),String(Math.max(0,parseInt(value||0,10)||0)));}
 function quotaLimit(cfg,type){return type==='basic'?cfg.basicLimit:cfg.premiumLimit;}
-function consumeBasicSession(code,cfg){
-  if(cfg.basicLimit==null)return true;
-  const used=quotaUsed(code,'basic');
-  if(used>=cfg.basicLimit)return false;
-  localStorage.setItem(quotaKey(code,'basic'),String(used+1));
+function accessHasFullFeatures(cfg){
+  const features=cfg?.features||[];
+  return Object.keys(LOCKED_FEATURES).every(f=>features.includes(f));
+}
+function accessLearningType(cfg){
+  return accessHasFullFeatures(cfg)?'premium':'basic';
+}
+function quotaName(type){return type==='premium'?'全功能学习':'基础学习';}
+function consumeLearningSession(newCount,lesson){
+  if(teacherMode()||!newCount)return true;
+  if(!currentAccess){alert('请先输入访问码。');changeAccessCode();return false;}
+  const cfg=CLARA_ACCESS_CODES[currentAccess.code];
+  if(!cfg){alert('访问码已失效，请重新输入。');changeAccessCode();return false;}
+  const type=accessLearningType(cfg);
+  const limit=quotaLimit(cfg,type);
+  const used=quotaUsed(currentAccess.code,type);
+  if(limit!=null&&used>=limit){
+    alert(`${quotaName(type)}次数已用完，请联系 Clara 老师续费或更换访问码。`);
+    updateAccessBadge();
+    return false;
+  }
+  localStorage.setItem(quotaKey(currentAccess.code,type),String(used+1));
+  const remain=limit==null?'不限':Math.max(0,limit-used-1);
+  lesson.learningSessions=Array.isArray(lesson.learningSessions)?lesson.learningSessions:[];
+  lesson.learningSessions.push({type,newCount,at:new Date().toISOString()});
+  updateAccessBadge();
+  alert(`已开始 1 次${quotaName(type)}：本次新增 ${newCount} 个单词，剩余 ${remain} 次。`);
   return true;
 }
 function ensurePremiumSession(feature){
   if(teacherMode())return true;
   if(!LOCKED_FEATURES[feature])return true;
   if(!currentAccess)return false;
-  if(currentAccess.premiumSession)return true;
   const cfg=CLARA_ACCESS_CODES[currentAccess.code];
   if(!cfg)return false;
-  const limit=quotaLimit(cfg,'premium');
-  const used=quotaUsed(currentAccess.code,'premium');
-  if(limit!=null&&used>=limit)return false;
-  localStorage.setItem(quotaKey(currentAccess.code,'premium'),String(used+1));
-  currentAccess.premiumSession=true;
-  localStorage.setItem('clara_access',JSON.stringify(currentAccess));
-  updateAccessBadge();
+  if(accessHasFullFeatures(cfg)&&featureUnlocked(feature))return true;
   return true;
 }
 function featureUnlocked(feature){
@@ -643,6 +660,46 @@ function updateAccessBadge(){
   const b=cfg.basicLimit==null?'∞':Math.max(0,cfg.basicLimit-quotaUsed(currentAccess.code,'basic'));
   const p=cfg.premiumLimit==null?'∞':Math.max(0,cfg.premiumLimit-quotaUsed(currentAccess.code,'premium'));
   el.textContent=`${currentAccess.name||'学员'} 基${b}/全${p}`;
+}
+function accessSnapshot(){
+  const access=currentAccess&&!currentAccess.teacher?{
+    code:currentAccess.code,
+    name:currentAccess.name||'学员',
+    features:currentAccess.features||[],
+    expires:currentAccess.expires||'',
+    activatedAt:currentAccess.activatedAt||''
+  }:null;
+  const quotas={};
+  Object.keys(CLARA_ACCESS_CODES).forEach(code=>{
+    quotas[code]={basic:quotaUsed(code,'basic'),premium:quotaUsed(code,'premium')};
+  });
+  return {access,quotas};
+}
+function restoreAccessSnapshot(snapshot){
+  if(!snapshot||typeof snapshot!=='object') return;
+  if(snapshot.access&&CLARA_ACCESS_CODES[snapshot.access.code]){
+    const cfg=CLARA_ACCESS_CODES[snapshot.access.code];
+    currentAccess={
+      code:snapshot.access.code,
+      name:snapshot.access.name||cfg.name||'学员',
+      features:Array.isArray(snapshot.access.features)?snapshot.access.features:(cfg.features||[]),
+      expires:snapshot.access.expires||cfg.expires||'',
+      activatedAt:snapshot.access.activatedAt||new Date().toISOString(),
+      premiumSession:false
+    };
+    localStorage.setItem('clara_access',JSON.stringify(currentAccess));
+    const overlay=document.getElementById('access-overlay');
+    if(overlay) overlay.style.display='none';
+  }
+  if(snapshot.quotas&&typeof snapshot.quotas==='object'){
+    Object.keys(snapshot.quotas).forEach(code=>{
+      if(!CLARA_ACCESS_CODES[code]) return;
+      setQuotaUsed(code,'basic',snapshot.quotas[code].basic);
+      setQuotaUsed(code,'premium',snapshot.quotas[code].premium);
+    });
+  }
+  updateFeatureLocks();
+  updateAccessBadge();
 }
 function todayStr(){return new Date().toISOString().slice(0,10);}
 function freshStats(){return{today:todayStr(),words:{},dictRight:0,dictWrong:0,readGood:0,readWeak:0,streak:0,lastStudyDate:''};}
@@ -822,11 +879,34 @@ function clearRows() {
 function saveWords() {
   const l = getActive(); if(!l) return;
   const oldByEn = new Map((l.words||[]).map(w=>[normalizeAnswer(w.en), w]));
-  l.words = getCurrentRows().filter(w=>w.en).map(w=>{
+  const rows=getCurrentRows().filter(w=>w.en);
+  const newKeys=new Set();
+  rows.forEach(w=>{
+    const key=normalizeAnswer(w.en);
+    if(key&&!oldByEn.has(key)) newKeys.add(key);
+  });
+  const newCount=newKeys.size;
+  if(newCount&&!consumeLearningSession(newCount,l)) return;
+  l.words = rows.map(w=>{
     const old=oldByEn.get(normalizeAnswer(w.en));
     return old ? {...old, ...w} : w;
   });
+  if(newCount) resetGenerationForNewWordSet(l);
   save(); renderLessons();
+}
+function wordSetSignature(words){
+  return (words||[])
+    .map(w=>normalizeAnswer(w.en))
+    .filter(Boolean)
+    .sort()
+    .join('|');
+}
+function resetGenerationForNewWordSet(lesson){
+  if(!lesson) return;
+  lesson.wordSetSignature=wordSetSignature(lesson.words);
+  lesson.sentenceGenerated=false;
+  lesson.passageGenerated=false;
+  lesson.passage=null;
 }
 function toggleImport() {
   const b = document.getElementById('import-box');
@@ -1318,10 +1398,14 @@ function handleSlotKey(kind,e){
   if(e.isComposing) return;
   const isSpell=kind==='spell';
   const l=getActive();if(!l)return;
-  const answer=l.words[isSpell?spellIdx:dictIdx].en;
+  const answer=isSpell ? l.words[spellIdx].en : (wordsForMode('dictation')[dictIdx]?.en||'');
+  if(!answer) return;
   const state=isSpell?spellSlotState:dictSlotState;
   let cursor=isSpell?spellCursor:dictCursor;
   if(e.key==='Enter'){isSpell?spellNext():dictNext();return;}
+  if(SLOT_INPUT_SUPPORTS_BEFOREINPUT&&!e.forceSlot&&(e.key==='Backspace'||(e.key.length===1 && /[A-Za-z'-]/.test(e.key)))){
+    return;
+  }
   if(e.key==='Backspace'){
     e.preventDefault();
     if(state[cursor]) state[cursor]='';
@@ -1341,7 +1425,7 @@ function handleSlotBeforeInput(kind,e){
   const fakeKey=e.inputType==='deleteContentBackward'?'Backspace':text;
   if(fakeKey==='Backspace'||/^[A-Za-z'-]$/.test(fakeKey)){
     e.preventDefault();
-    handleSlotKey(kind,{key:fakeKey,preventDefault(){},isComposing:false});
+    handleSlotKey(kind,{key:fakeKey,preventDefault(){},isComposing:false,forceSlot:true});
     const input=document.getElementById(kind==='spell'?'spell-input':'dict-input');
     if(input) input.value='';
   }
@@ -1612,7 +1696,7 @@ function renderSentenceGenerator(){
   const cfg=getAiConfig();
   const showSettings=!hasSiteAi()||!CLARA_SITE_AI.hideSettingsForStudents||new URLSearchParams(location.search).get('teacher')==='1';
   const l=getActive();
-  const used=!!(l&&l.sentenceGenerated&&!teacherMode());
+  const used=!!(l&&l.sentenceGenerated&&!teacherMode()&&(!l.sentenceSignature||l.sentenceSignature===wordSetSignature(l.words)));
   return `<div class="generator-box">
     <div class="generator-head">
       <h3>✨ 自动生成相关句子</h3>
@@ -1644,7 +1728,7 @@ function renderSentenceGenerator(){
         <button class="btn btn-outline btn-sm" onclick="testAiConnection()">🔌 测试连接</button>
       </div>
     </details>`:''}
-    <div class="generator-status" id="generator-status">${used?'本课时已经生成过一次例句。为节省 AI 次数，本课不再重复生成。':(cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}${hasSiteAi()?'（站点内置）':''}`:'当前未配置 API Key，将使用本地例句库。点击 AI 设置 → 选择免费的智谱AI或Groq，填入Key即可。')}</div>
+    <div class="generator-status" id="generator-status">${used?'这组单词已经生成过一次例句。新增英文词条后，可按新一组单词再生成一次。':(cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}${hasSiteAi()?'（站点内置）':''}`:'当前未配置 API Key，将使用本地例句库。点击 AI 设置 → 选择免费的智谱AI或Groq，填入Key即可。')}</div>
   </div>`;
 }
 function hasSiteAi(){
@@ -1732,7 +1816,8 @@ function setGenStatus(text,isBad){
 }
 async function generateSentences(mode){
   const l=getActive();if(!l)return;
-  if(l.sentenceGenerated&&!teacherMode()){setGenStatus('本课时已经生成过一次例句。为节省 AI 次数，本课不再重复生成。',true);return;}
+  const sig=wordSetSignature(l.words);
+  if(l.sentenceGenerated&&(!l.sentenceSignature||l.sentenceSignature===sig)&&!teacherMode()){setGenStatus('这组单词已经生成过一次例句。新增英文词条后，可按新一组单词再生成一次。',true);return;}
   const cfg=readAiConfig();
   const targets=(l.words||[]).filter(w=>w.en&&(mode==='all'||!w.sentence));
   if(!targets.length){setGenStatus('当前没有需要生成的单词。');return;}
@@ -1741,6 +1826,7 @@ async function generateSentences(mode){
     const generated=cfg.key?await generateWithAi(targets,cfg):generateWithTemplates(targets,cfg.level);
     applyGeneratedSentences(l,generated,mode);
     l.sentenceGenerated=true;
+    l.sentenceSignature=sig;
     save();
     renderEditor();
     renderSentence();
@@ -1750,6 +1836,7 @@ async function generateSentences(mode){
     const generated=generateWithTemplates(targets,cfg.level);
     applyGeneratedSentences(l,generated,mode);
     l.sentenceGenerated=true;
+    l.sentenceSignature=sig;
     save();
     renderEditor();
     renderSentence();
@@ -2031,9 +2118,11 @@ function srStop(){srAutoActive=false;const cb=document.getElementById('sr-auto')
 
 // ─── WEAK WORDS ───
 function getWeakEntries(){
-  return lessons.flatMap(l=>(l.words||[])
+  const l=getActive();
+  if(!l) return [];
+  return (l.words||[])
     .filter(w=>(w.weakCount||0)>0&&!w.mastered)
-    .map(w=>({lesson:l,word:w})));
+    .map(w=>({lesson:l,word:w}));
 }
 function renderWeak(){
   const c=document.getElementById('weak-content');
@@ -2118,14 +2207,15 @@ function renderStory(){
   const c=document.getElementById('story-content');
   if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
   const p=l.passage||null;
+  const storyUsed=!!((l.passageGenerated||l.passage)&&!teacherMode()&&(!l.passageSignature||l.passageSignature===wordSetSignature(l.words)));
   c.innerHTML=`<div class="generator-box">
     <div class="generator-head"><h3>📖 词串成文</h3></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-      <button class="btn btn-primary btn-sm" onclick="generateStory()">✨ 生成短文</button>
+      <button class="btn btn-primary btn-sm" onclick="generateStory()" ${storyUsed?'disabled':''}>✨ 生成短文</button>
       <button class="btn btn-outline btn-sm" onclick="speakStory()">🔊 朗读短文</button>
     </div>
     </div>
-    <div class="generator-status" id="story-status">会尽量包含本课前 5-10 个单词；${getAiConfig().key?'当前会优先调用 AI。':'当前未配置 API Key，将使用本地通用短文。'}</div>
+    <div class="generator-status" id="story-status">${storyUsed?'这组单词已经生成过一次小语篇。新增英文词条后，可按新一组单词再生成一次。':`会尽量包含本课前 5-10 个单词；${getAiConfig().key?'当前会优先调用 AI。':'当前未配置 API Key，将使用本地通用短文。'}`}</div>
   </div>
   <div id="story-box">${p?storyHtml(p):'<div class="empty-state"><div class="emoji">📖</div><p>点击“生成短文”，把今天的单词串成一篇可朗读的小语篇。</p></div>'}</div>`;
 }
@@ -2137,6 +2227,8 @@ function storyHtml(p){
 }
 async function generateStory(){
   const l=getActive();if(!l)return;
+  const sig=wordSetSignature(l.words);
+  if((l.passageGenerated||l.passage)&&(!l.passageSignature||l.passageSignature===sig)&&!teacherMode()){setStoryStatus('这组单词已经生成过一次小语篇。新增英文词条后，可按新一组单词再生成一次。',true);return;}
   const words=(l.words||[]).filter(w=>w.en).slice(0,10);
   if(!words.length)return;
   const cfg=getAiConfig();
@@ -2153,6 +2245,8 @@ async function generateStory(){
     statusText=`AI 调用失败，已改用本地通用短文。失败原因：${e.message||'接口请求失败'}`;
     statusBad=true;
   }
+  l.passageGenerated=true;
+  l.passageSignature=sig;
   save();
   renderStory();
   setStoryStatus(statusText,statusBad);
@@ -2327,7 +2421,7 @@ function renderReport(){
   <div class="generator-box" style="margin-top:14px">
     <div class="generator-head"><h3>🗂 数据存档</h3></div>
     <div class="generator-tools">
-      <div class="generator-status" id="archive-status">导出后可在另一台设备导入，恢复课时、薄弱词仓和学习战报。</div>
+      <div class="generator-status" id="archive-status">导出后可在另一台设备导入，恢复课时、薄弱词仓、学习战报和剩余次数。换手机/换浏览器请先导入这个存档，否则无法恢复历史次数。</div>
       <div class="generator-buttons">
         <button class="btn btn-primary btn-sm" onclick="exportArchive()">导出存档</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('archive-file').click()">导入存档</button>
@@ -2340,14 +2434,38 @@ function setArchiveStatus(text,isBad){
   const el=document.getElementById('archive-status');
   if(el){el.textContent=text;el.style.color=isBad?'var(--red)':'var(--text-3)';}
 }
+function stableArchiveString(data){
+  return JSON.stringify(data,Object.keys(data).sort());
+}
+function archiveCoreHash(core){
+  const text=JSON.stringify(core);
+  let h=2166136261;
+  const source=text+'|'+ARCHIVE_SIGN_SALT;
+  for(let i=0;i<source.length;i++){
+    h^=source.charCodeAt(i);
+    h=Math.imul(h,16777619);
+  }
+  return ('00000000'+(h>>>0).toString(16)).slice(-8);
+}
+function signArchive(payload){
+  const core={...payload};
+  delete core.signature;
+  return archiveCoreHash(core);
+}
+function verifyArchive(data){
+  if(data.version<3) return {ok:true,legacy:true};
+  if(!data.signature) return {ok:false,reason:'missing'};
+  return {ok:signArchive(data)===data.signature,legacy:false};
+}
 function exportArchive(){
   const payload={
     app:'Clara词研堂',
-    version:2,
+    version:3,
     exportedAt:new Date().toISOString(),
     lessons,
     activeLessonId,
     studyStats,
+    accessState:accessSnapshot(),
     settings:{
       aiKey:hasSiteAi()?'':(localStorage.getItem('vocab_ai_key')||''),
       aiEndpoint:localStorage.getItem('vocab_ai_endpoint')||'',
@@ -2355,6 +2473,7 @@ function exportArchive(){
       aiLevel:localStorage.getItem('vocab_ai_level')||''
     }
   };
+  payload.signature=signArchive(payload);
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -2364,7 +2483,7 @@ function exportArchive(){
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  setArchiveStatus('存档已导出，请妥善保存这个 JSON 文件。');
+  setArchiveStatus('存档已导出。这个文件包含学习历史和剩余次数，请妥善保存。');
 }
 function importArchive(file){
   if(!file)return;
@@ -2373,6 +2492,12 @@ function importArchive(file){
     try{
       const data=JSON.parse(reader.result);
       if(!Array.isArray(data.lessons)) throw new Error('bad archive');
+      const verified=verifyArchive(data);
+      if(!verified.ok&&!teacherMode()){
+        setArchiveStatus('导入失败：存档校验不通过，可能被手动修改过。请使用原始导出的存档文件。',true);
+        return;
+      }
+      if(verified.legacy&&!teacherMode()&&!confirm('这是旧版存档，无法校验剩余次数。可以导入学习历史，但次数以当前浏览器为准。继续吗？')) return;
       if(!confirm('导入存档会覆盖当前本机数据，确定继续？')) return;
       lessons=data.lessons;
       activeLessonId=data.activeLessonId&&lessons.find(l=>l.id===data.activeLessonId)?data.activeLessonId:(lessons[0]?.id||null);
@@ -2386,8 +2511,9 @@ function importArchive(file){
         localStorage.setItem('vocab_ai_model',data.settings.aiModel||'');
         localStorage.setItem('vocab_ai_level',data.settings.aiLevel||'natural');
       }
+      if(data.accessState) restoreAccessSnapshot(data.accessState);
       renderLessons();renderEditor();updateBadge();renderReport();
-      setArchiveStatus('存档导入成功，课时和薄弱词仓已恢复。');
+      setArchiveStatus(data.accessState?'存档导入成功，课时、薄弱词仓和剩余次数已恢复。':'存档导入成功，课时和薄弱词仓已恢复。');
     }catch(e){
       console.error(e);
       setArchiveStatus('导入失败：请选择 Clara词研堂 导出的 JSON 存档。',true);
