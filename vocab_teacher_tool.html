@@ -447,6 +447,7 @@ function load() {
   try { activeLessonId = localStorage.getItem('vocab_active') || null; } catch(e){ activeLessonId=null; }
   try { studyStats = JSON.parse(localStorage.getItem('vocab_stats') || 'null'); } catch(e){ studyStats=null; }
   if(!studyStats) studyStats = freshStats();
+  normalizeWeakData();
   if (activeLessonId && !lessons.find(l=>l.id===activeLessonId)) activeLessonId = null;
 }
 function save() {
@@ -482,15 +483,44 @@ function recordStudy(kind,ok,word){
 }
 function markWeak(word,reason){
   if(!word) return;
+  const source=weakSourceFromReason(reason);
   word.weakCount=(word.weakCount||0)+1;
   word.weakReason=reason;
-  const source=weakSourceFromReason(reason);
   if(source){
     word.weakSources=word.weakSources||{};
     word.weakSources[source]=(word.weakSources[source]||0)+1;
+    word.weakLog=Array.isArray(word.weakLog)?word.weakLog:[];
+    word.weakLog.push({source,reason,at:new Date().toLocaleString()});
   }
   word.weakAt=new Date().toLocaleString();
   word.mastered=false;
+}
+function normalizeWeakData(){
+  let changed=false;
+  lessons.forEach(l=>(l.words||[]).forEach(w=>{
+    if(!w||!(w.weakCount>0)) return;
+    if(!w.weakSources||typeof w.weakSources!=='object') w.weakSources={};
+    if(!Array.isArray(w.weakLog)) w.weakLog=[];
+    const logSources=w.weakLog.reduce((acc,item)=>{
+      if(item&&item.source) acc[item.source]=(acc[item.source]||0)+1;
+      return acc;
+    },{});
+    if(Object.keys(logSources).length){
+      w.weakSources=logSources;
+      changed=true;
+      return;
+    }
+    const source=weakSourceFromReason(w.weakReason);
+    if(source){
+      w.weakSources={[source]:w.weakCount||1};
+      w.weakLog=[{source,reason:w.weakReason||source,at:w.weakAt||''}];
+      changed=true;
+    }else{
+      w.weakSources={};
+      changed=true;
+    }
+  }));
+  if(changed) localStorage.setItem('vocab_lessons', JSON.stringify(lessons));
 }
 function weakSourceFromReason(reason){
   const r=reason||'';
@@ -506,6 +536,7 @@ function clearWeak(word){
   word.weakReason='';
   word.weakAt='';
   word.weakSources={};
+  word.weakLog=[];
 }
 
 // ─── LESSONS ───
@@ -1658,12 +1689,16 @@ function renderWeak(){
   ${groups.map(g=>weakGroupHtml(g,entries)).join('')}`;
 }
 function weakEntryHasSource(entry,source){
+  const log=Array.isArray(entry.word.weakLog)?entry.word.weakLog:[];
+  if(log.length) return log.some(item=>item&&item.source===source);
   const sources=entry.word.weakSources||{};
   if(sources[source]>0) return true;
   return !Object.keys(sources).length && weakSourceFromReason(entry.word.weakReason)===source;
 }
 function weakSourceCount(entry,source){
+  const log=Array.isArray(entry.word.weakLog)?entry.word.weakLog:[];
   const sources=entry.word.weakSources||{};
+  if(log.length) return Math.max(log.filter(item=>item&&item.source===source).length,sources[source]||0);
   return sources[source]||((!Object.keys(sources).length&&weakSourceFromReason(entry.word.weakReason)===source)?(entry.word.weakCount||1):0);
 }
 function weakGroupHtml(group,entries){
