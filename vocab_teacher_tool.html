@@ -135,6 +135,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .practice-kicker{font-size:12px;color:var(--text-3);font-weight:700;letter-spacing:.04em;margin-bottom:10px}
 .practice-prompt{font-size:18px;color:var(--text-2);line-height:1.5;margin-bottom:16px}
 .practice-main{font-size:34px;font-weight:800;color:var(--text);line-height:1.2;margin-bottom:10px;word-break:break-word}
+.practice-main.muted{color:var(--text-3);font-weight:700}
+.inline-speaker{border:none;background:var(--accent-bg);color:var(--accent);border-radius:999px;width:36px;height:36px;font-size:18px;cursor:pointer;vertical-align:middle;margin-left:8px}
+.mode-btn.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .practice-answer{border-top:1px solid var(--border);margin-top:18px;padding-top:16px;font-size:22px;font-weight:700;color:var(--green);display:none}
 .practice-answer.show{display:block}
 .practice-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
@@ -142,6 +145,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .dict-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
 .dict-input.correct{border-color:var(--green);background:var(--green-bg)}
 .dict-input.wrong{border-color:var(--red);background:var(--red-bg)}
+.spell-area{width:100%;max-width:420px;margin:0 auto;position:relative}
+.spell-slots{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;min-height:54px}
+.spell-slot{width:30px;height:44px;border-bottom:3px solid var(--border-strong);display:flex;align-items:flex-end;justify-content:center;font-size:26px;font-weight:800;color:var(--text);line-height:1}
+.spell-slot.space{width:18px;border-bottom:none}
+.spell-slot.placeholder{color:var(--text-3)}
+.spell-slot.correct{color:var(--green);border-bottom-color:var(--green)}
+.spell-slot.wrong{color:var(--red);border-bottom-color:var(--red)}
+.spell-target span{color:#c9c9c9;transition:color .12s}
+.spell-target span.done{color:var(--text)}
+.spell-input{position:absolute;inset:0;width:100%;height:100%;opacity:.02;border:none;background:transparent;color:transparent;caret-color:transparent}
+.spell-input:focus{outline:none}
 .feedback{min-height:24px;font-size:14px;font-weight:700;text-align:center}
 .feedback.ok{color:var(--green)}
 .feedback.bad{color:var(--red)}
@@ -255,7 +269,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
     <button class="nav-tab" onclick="showPanel('browse')" id="tab-browse">📋 卡片浏览</button>
     <button class="nav-tab" onclick="showPanel('readword')" id="tab-readword">🎤 跟读单词</button>
     <button class="nav-tab" onclick="showPanel('listen')" id="tab-listen">👂 听说练习</button>
-    <button class="nav-tab" onclick="showPanel('dictation')" id="tab-dictation">✍️ 听写练习</button>
+    <button class="nav-tab" onclick="showPanel('spell')" id="tab-spell">🔤 音拼练习</button>
+    <button class="nav-tab" onclick="showPanel('dictation')" id="tab-dictation">✍️ 默写练习</button>
     <button class="nav-tab" onclick="showPanel('game')" id="tab-game">🎮 极速配</button>
     <button class="nav-tab" onclick="showPanel('weak')" id="tab-weak">🧠 薄弱词仓</button>
     <button class="nav-tab" onclick="showPanel('sentence')" id="tab-sentence">💬 句子拓展</button>
@@ -350,14 +365,21 @@ exercise  /ˈeksəsaɪz/  n./v. 锻炼</pre>
 <!-- LISTEN SPEAK PANEL -->
 <div class="panel" id="panel-listen">
   <div class="sec-title">听说练习</div>
-  <div class="sec-sub">先听英文，学生自己说中文，再点开答案核对</div>
+  <div class="sec-sub">听力、英译中、中译英三种口头练习，点小喇叭可重复发音。</div>
   <div id="listen-content"></div>
+</div>
+
+<!-- SPELL PANEL -->
+<div class="panel" id="panel-spell">
+  <div class="sec-title">音拼练习</div>
+  <div class="sec-sub">看着英文，听发音，照着拼一遍；拼完会再播放一次并自动进入下一个。</div>
+  <div id="spell-content"></div>
 </div>
 
 <!-- DICTATION PANEL -->
 <div class="panel" id="panel-dictation">
-  <div class="sec-title">听写练习</div>
-  <div class="sec-sub">听英文发音，自己拼写单词或词组，系统自动检查</div>
+  <div class="sec-title">默写练习</div>
+  <div class="sec-sub">听发音、看中文提示，在横线上默写英文；填满后系统自动判断。</div>
   <div id="dictation-content"></div>
 </div>
 
@@ -371,7 +393,7 @@ exercise  /ˈeksəsaɪz/  n./v. 锻炼</pre>
 <!-- WEAK PANEL -->
 <div class="panel" id="panel-weak">
   <div class="sec-title">薄弱词仓</div>
-  <div class="sec-sub">按听说、听写、极速配三类整理错词，复习更有靶心。</div>
+  <div class="sec-sub">按听说、默写、极速配三类整理错词，复习更有靶心。</div>
   <div id="weak-content"></div>
 </div>
 
@@ -427,11 +449,14 @@ let rwInterval = 5000;
 let readTarget = 'word'; // 'word' or 'sentence'
 let listenIdx = 0;
 let listenAnswerShown = false;
-let listenShowWord = false;
+let listenMode = 'listening';
 let listenAuto = false;
 let listenAutoTimer = null;
 let listenAdvanceTimer = null;
 let listenInterval = 7000;
+let spellIdx = 0;
+let spellChecked = false;
+let keyAudioCtx = null;
 let dictIdx = 0;
 let dictChecked = false;
 let dictAuto = false;
@@ -525,7 +550,7 @@ function normalizeWeakData(){
 function weakSourceFromReason(reason){
   const r=reason||'';
   if(r.includes('听说')) return 'listen';
-  if(r.includes('听写')||r.includes('查看听写答案')) return 'dictation';
+  if(r.includes('听写')||r.includes('默写')||r.includes('查看听写答案')||r.includes('查看默写答案')) return 'dictation';
   if(r.includes('极速配')) return 'game';
   return '';
 }
@@ -814,8 +839,8 @@ function browseClick(i) {
 }
 
 // ─── STAGE FLOW ───
-const STAGE_FLOW=['browse','readword','listen','dictation','game','weak','sentence','story','report'];
-const STAGE_LABELS={browse:'卡片浏览',readword:'跟读单词',game:'极速配',listen:'听说练习',dictation:'听写练习',weak:'薄弱词仓',sentence:'句子拓展',story:'Clara 小语篇',report:'学习战报'};
+const STAGE_FLOW=['browse','readword','listen','spell','dictation','game','weak','sentence','story','report'];
+const STAGE_LABELS={browse:'卡片浏览',readword:'跟读单词',game:'极速配',listen:'听说练习',spell:'音拼练习',dictation:'默写练习',weak:'薄弱词仓',sentence:'句子拓展',story:'Clara 小语篇',report:'学习战报'};
 function stageCompleteHtml(stage){
   const next=nextStageId(stage);
   return `<div class="finish-card">
@@ -830,6 +855,7 @@ function stageCompleteHtml(stage){
 function showStageComplete(stage){
   if(stage==='readword'){document.getElementById('readword-content').innerHTML=stageCompleteHtml(stage);return;}
   if(stage==='listen'){document.getElementById('listen-content').innerHTML=stageCompleteHtml(stage);return;}
+  if(stage==='spell'){document.getElementById('spell-content').innerHTML=stageCompleteHtml(stage);return;}
   if(stage==='dictation'){document.getElementById('dictation-content').innerHTML=stageCompleteHtml(stage);return;}
   if(stage==='game'){
     const b=document.getElementById('game-board');
@@ -844,6 +870,7 @@ function goNextStage(stage){showPanel(nextStageId(stage));}
 function restartStage(stage){
   if(stage==='readword'){readIdx=0;renderReadWord();if(autoActive)rwSpeakSchedule();else rwSpeak();return;}
   if(stage==='listen'){listenIdx=0;listenAnswerShown=false;renderListen();if(listenAuto)listenAutoSchedule();else listenSpeak();return;}
+  if(stage==='spell'){spellIdx=0;spellChecked=false;renderSpell();return;}
   if(stage==='dictation'){dictIdx=0;dictChecked=false;renderDictation();if(dictAuto)dictAutoSchedule();return;}
   if(stage==='game'){startGame(0);return;}
   showPanel(stage);
@@ -924,18 +951,21 @@ function renderListen(){
   if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
   listenIdx=Math.min(listenIdx,l.words.length-1);
   const w=l.words[listenIdx];
+  const main=listenMainHtml(w);
+  const answer=listenAnswerHtml(w);
   c.innerHTML=`
     <div class="read-wrap">
       <div class="practice-card">
-        <div class="practice-kicker">LISTEN AND SAY IN CHINESE</div>
-        <div class="practice-prompt">点击播放英文，说出中文意思，再翻看答案</div>
-        <div class="practice-main">${escHtml(maskWord(w.en))}</div>
-        <div class="practice-answer${listenAnswerShown?' show':''}" id="listen-answer">${escHtml(w.zh||'（未填写中文）')}</div>
+        <div class="practice-kicker">${listenModeTitle()}</div>
+        <div class="practice-prompt">${listenModePrompt()}</div>
+        <div class="practice-main${listenMode==='listening'?' muted':''}">${main}<button class="inline-speaker" onclick="listenSpeak()" title="播放英文">🔊</button></div>
+        <div class="practice-answer${listenAnswerShown?' show':''}" id="listen-answer">${answer}</div>
       </div>
       <div class="practice-actions">
-        <button class="speak-btn" id="listen-speak-btn" onclick="listenSpeak()">🔊 播放英文</button>
+        <button class="nav-btn mode-btn${listenMode==='listening'?' active':''}" onclick="setListenMode('listening')">听力练习</button>
+        <button class="nav-btn mode-btn${listenMode==='en2zh'?' active':''}" onclick="setListenMode('en2zh')">英译中练习</button>
+        <button class="nav-btn mode-btn${listenMode==='zh2en'?' active':''}" onclick="setListenMode('zh2en')">中译英练习</button>
         <button class="nav-btn" onclick="listenReveal()">显示答案</button>
-        <button class="nav-btn" onclick="listenSpeakZh()">朗读中文</button>
         <button class="nav-btn" onclick="listenMark(false)">需复习</button>
       </div>
       <div class="nav-row">
@@ -951,24 +981,34 @@ function renderListen(){
           <option value="7000" ${listenInterval===7000?'selected':''}>7秒</option>
           <option value="10000" ${listenInterval===10000?'selected':''}>10秒</option>
         </select>
-        <label style="margin-left:8px"><input type="checkbox" id="listen-show-word" onchange="listenToggleWord()" ${listenShowWord?'checked':''}> 显示英文文字</label>
       </div>
     </div>`;
 }
-function maskWord(text){
-  return listenShowWord ? text : '••••••';
+function listenModeTitle(){
+  return listenMode==='zh2en'?'CHINESE TO ENGLISH':(listenMode==='en2zh'?'ENGLISH TO CHINESE':'LISTENING');
 }
-function listenToggleWord(){listenShowWord=document.getElementById('listen-show-word')?.checked||false;renderListen();}
+function listenModePrompt(){
+  if(listenMode==='zh2en') return '看中文，说出英文；点小喇叭可先听一遍英文发音。';
+  if(listenMode==='en2zh') return '看英文，说出中文意思；点“显示答案”核对。';
+  return '不显示英文，先听发音，说出中文意思；点“显示答案”核对。';
+}
+function listenMainHtml(w){
+  if(listenMode==='zh2en') return escHtml(w.zh||'（未填写中文）');
+  if(listenMode==='en2zh') return escHtml(w.en);
+  return '••••••';
+}
+function listenAnswerHtml(w){
+  if(listenMode==='zh2en') return `英文：${escHtml(w.en)}`;
+  if(listenMode==='en2zh') return `中文：${escHtml(w.zh||'（未填写中文）')}`;
+  return `英文：${escHtml(w.en)}<br>中文：${escHtml(w.zh||'（未填写中文）')}`;
+}
+function setListenMode(mode){listenMode=mode;listenAnswerShown=false;renderListen();if(mode==='listening')listenSpeak();}
 function listenSpeak(cb){
   const l=getActive();if(!l)return;
-  const btn=document.getElementById('listen-speak-btn');
-  if(btn){btn.classList.add('speaking');btn.textContent='🔊 播放中...';}
   speakEN(l.words[listenIdx].en,()=>{
-    if(btn){btn.classList.remove('speaking');btn.textContent='🔊 播放英文';}
     if(cb)cb();
   });
 }
-function listenSpeakZh(){const l=getActive();if(!l)return;speakZH(l.words[listenIdx].zh||'');}
 function listenReveal(){listenAnswerShown=true;document.getElementById('listen-answer')?.classList.add('show');}
 function listenMark(ok){
   const l=getActive();if(!l)return;
@@ -1039,6 +1079,100 @@ function listenAutoScheduleAfterReveal(){
   },listenInterval);
 }
 
+// ─── SOUND SPELL MODE ───
+function renderSpell(){
+  const l=getActive();
+  const c=document.getElementById('spell-content');
+  if(!l||!l.words.length){c.innerHTML='<div class="no-words">📭 当前课时还没有单词</div>';return;}
+  spellIdx=Math.min(spellIdx,l.words.length-1);
+  const w=l.words[spellIdx];
+  c.innerHTML=`
+    <div class="read-wrap">
+      <div class="practice-card">
+        <div class="practice-kicker">SOUND SPELLING</div>
+        <div class="practice-prompt">看着浅灰色单词，听发音，照着打一遍；打对的字母会变黑。</div>
+        <div class="practice-main spell-target" id="spell-target">${spellTargetHtml(w.en)}<button class="inline-speaker" onclick="spellSpeak()" title="播放英文">🔊</button></div>
+        <div class="spell-area" onclick="document.getElementById('spell-input')?.focus()">
+          <div class="spell-slots" id="spell-slots">${spellSlotsHtml('',w.en)}</div>
+          <input class="spell-input" id="spell-input" autocomplete="off" spellcheck="false" inputmode="text">
+        </div>
+        <div class="feedback" id="spell-feedback"></div>
+      </div>
+      <div class="nav-row">
+        <button class="nav-btn" onclick="spellPrev()">← 上一个</button>
+        <span class="prog-label">${spellIdx+1} / ${l.words.length}</span>
+        <button class="nav-btn" onclick="spellNext()">下一个 →</button>
+      </div>
+    </div>`;
+  const inp=document.getElementById('spell-input');
+  if(inp){
+    inp.addEventListener('input',spellHandleInput);
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter')spellNext();});
+  }
+  setTimeout(()=>{inp?.focus();spellSpeak();},120);
+}
+function spellTargetHtml(word,typed=''){
+  let ti=0;
+  return String(word||'').split('').map(ch=>{
+    if(/\s/.test(ch)) return ' ';
+    const done=normalizeAnswer(typed[ti]||'')===normalizeAnswer(ch);
+    ti++;
+    return `<span class="${done?'done':''}">${escHtml(ch)}</span>`;
+  }).join('');
+}
+function spellSlotsHtml(value,answer){
+  let vi=0;
+  return String(answer||'').split('').map(ch=>{
+    if(/\s/.test(ch)) return '<span class="spell-slot space"></span>';
+    const typed=(value||'')[vi++]||'';
+    return `<span class="spell-slot${typed?'':' placeholder'}">${escHtml(typed||'-')}</span>`;
+  }).join('');
+}
+function spellSpeak(){const l=getActive();if(l)speakEN(l.words[spellIdx].en);}
+function spellHandleInput(e){
+  const l=getActive();if(!l||spellChecked)return;
+  const w=l.words[spellIdx];
+  const inp=e.target;
+  playKeySound();
+  const max=answerLetterCount(w.en);
+  let value=String(inp.value||'').replace(/\s+/g,'').slice(0,max);
+  inp.value=value;
+  document.getElementById('spell-slots').innerHTML=spellSlotsHtml(value,w.en);
+  document.getElementById('spell-target').innerHTML=spellTargetHtml(w.en,value)+'<button class="inline-speaker" onclick="spellSpeak()" title="播放英文">🔊</button>';
+  if(answerLetterCount(value)>=max){
+    spellChecked=true;
+    const ok=compactAnswer(value)===compactAnswer(w.en);
+    const fb=document.getElementById('spell-feedback');
+    if(fb){fb.className='feedback '+(ok?'ok':'bad');fb.textContent=ok?'拼写完成，听一遍进入下一个。':'请看准单词，再拼一遍。';}
+    spellSpeak();
+    setTimeout(spellNext,ok?900:1200);
+  }
+}
+function spellNext(){
+  const len=getActive()?.words.length||0;
+  if(len&&spellIdx>=len-1){showStageComplete('spell');return;}
+  spellChecked=false;
+  spellIdx=(spellIdx+1)%(len||1);
+  renderSpell();
+}
+function spellPrev(){
+  spellChecked=false;
+  spellIdx=(spellIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);
+  renderSpell();
+}
+function playKeySound(){
+  try{
+    keyAudioCtx=keyAudioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    const osc=keyAudioCtx.createOscillator();
+    const gain=keyAudioCtx.createGain();
+    osc.type='sine';osc.frequency.value=520;
+    gain.gain.setValueAtTime(.035,keyAudioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.001,keyAudioCtx.currentTime+.06);
+    osc.connect(gain);gain.connect(keyAudioCtx.destination);
+    osc.start();osc.stop(keyAudioCtx.currentTime+.06);
+  }catch(e){}
+}
+
 // ─── DICTATION MODE ───
 function renderDictation(){
   const l=getActive();
@@ -1049,15 +1183,18 @@ function renderDictation(){
   c.innerHTML=`
     <div class="read-wrap">
       <div class="practice-card">
-        <div class="practice-kicker">DICTATION</div>
-        <div class="practice-prompt">听发音，拼写英文单词或词组，输入够长度后自动判断</div>
+        <div class="practice-kicker">MEMORY SPELLING</div>
+        <div class="practice-prompt">听发音，看中文，在横线上默写英文；每个横线对应一个字母。</div>
         <div class="hint-chip">${escHtml(w.zh||'未填写中文')}</div>
         <div style="height:16px"></div>
-        <input class="dict-input" id="dict-input" autocomplete="off" spellcheck="false" placeholder="输入英文拼写">
+        <div class="spell-area" onclick="document.getElementById('dict-input')?.focus()">
+          <div class="spell-slots" id="dict-slots">${spellSlotsHtml('',w.en)}</div>
+          <input class="spell-input" id="dict-input" autocomplete="off" spellcheck="false" inputmode="text">
+        </div>
         <div class="feedback" id="dict-feedback"></div>
       </div>
       <div class="practice-actions">
-        <button class="speak-btn" id="dict-speak-btn" onclick="dictSpeak()">🔊 播放英文</button>
+        <button class="inline-speaker" onclick="dictSpeak()" title="播放英文">🔊</button>
         <button class="nav-btn" onclick="dictHint()">提示</button>
         <button class="nav-btn" onclick="dictReveal()">显示答案</button>
       </div>
@@ -1085,29 +1222,33 @@ function renderDictation(){
 }
 function normalizeAnswer(s){return(s||'').toLowerCase().replace(/[’']/g,'').replace(/[-_]+/g,' ').replace(/[.,!?;:]/g,'').replace(/\s+/g,' ').trim();}
 function answerLetterCount(s){return normalizeAnswer(s).replace(/\s/g,'').length;}
+function compactAnswer(s){return normalizeAnswer(s).replace(/\s/g,'');}
 function dictSpeak(){
   const l=getActive();if(!l)return;
-  const btn=document.getElementById('dict-speak-btn');
-  if(btn){btn.classList.add('speaking');btn.textContent='🔊 播放中...';}
-  speakEN(l.words[dictIdx].en,()=>{if(btn){btn.classList.remove('speaking');btn.textContent='🔊 播放英文';}});
+  speakEN(l.words[dictIdx].en);
 }
 function dictCheck(){
   const l=getActive();if(!l)return;
   const w=l.words[dictIdx];
   const input=document.getElementById('dict-input');
-  const ok=normalizeAnswer(input?.value)===normalizeAnswer(w.en);
+  const ok=compactAnswer(input?.value)===compactAnswer(w.en);
   dictChecked=true;
   if(input) input.dataset.graded='1';
   recordStudy('dictation',ok,w);
-  if(!ok) markWeak(w,'听写错误'); else if((w.weakCount||0)>0) w.weakCount=Math.max(0,(w.weakCount||0)-1);
+  if(!ok) markWeak(w,'默写错误'); else if((w.weakCount||0)>0) w.weakCount=Math.max(0,(w.weakCount||0)-1);
   save();
-  dictShowAnswer(ok, ok?'正确':'听写错误');
+  dictShowAnswer(ok, ok?'正确':'默写错误');
   return ok;
 }
 function dictMaybeAutoCheck(){
   const l=getActive();if(!l||dictChecked)return;
   const input=document.getElementById('dict-input');
-  const val=String(input?.value||'');
+  playKeySound();
+  const max=answerLetterCount(l.words[dictIdx].en);
+  let val=String(input?.value||'').replace(/\s+/g,'').slice(0,max);
+  if(input) input.value=val;
+  const slots=document.getElementById('dict-slots');
+  if(slots) slots.innerHTML=spellSlotsHtml(val,l.words[dictIdx].en);
   if(answerLetterCount(val)<answerLetterCount(l.words[dictIdx].en)) return;
   const ok=dictCheck();
   clearTimeout(dictAutoTimer);
@@ -1124,13 +1265,13 @@ function dictHint(){
 function dictReveal(){
   const l=getActive();if(!l)return;
   const w=l.words[dictIdx];
-  markWeak(w,'查看听写答案');
+  markWeak(w,'查看默写答案');
   recordStudy('dictation',false,w);
   save();
   dictChecked=true;
   const input=document.getElementById('dict-input');
   if(input) input.dataset.graded='1';
-  dictShowAnswer(false,'查看听写答案');
+  dictShowAnswer(false,'查看默写答案');
   speakEN(l.words[dictIdx].en);
 }
 function dictNext(){
@@ -1141,7 +1282,7 @@ function dictNext(){
     dictAdvanceNow();
     return;
   }
-  dictGradeBeforeLeave('听写未填写');
+  dictGradeBeforeLeave('默写未填写');
   dictAdvanceTimer=setTimeout(dictAdvanceNow,1300);
 }
 function dictPrev(){clearTimeout(dictAutoTimer);clearTimeout(dictAdvanceTimer);dictChecked=false;dictIdx=(dictIdx-1+(getActive()?.words.length||1))%(getActive()?.words.length||1);renderDictation();if(dictAuto)dictAutoSchedule();}
@@ -1150,21 +1291,21 @@ function dictGradeBeforeLeave(blankReason){
   const w=l.words[dictIdx];
   const input=document.getElementById('dict-input');
   if(input?.dataset.graded==='1'){
-    dictShowAnswer(normalizeAnswer(input.value)===normalizeAnswer(w.en),'已检查');
+    dictShowAnswer(compactAnswer(input.value)===compactAnswer(w.en),'已检查');
     return;
   }
   const val=String(input?.value||'').trim();
-  const ok=val && normalizeAnswer(val)===normalizeAnswer(w.en);
+  const ok=val && compactAnswer(val)===compactAnswer(w.en);
   recordStudy('dictation',!!ok,w);
   if(ok){
     if((w.weakCount||0)>0) w.weakCount=Math.max(0,(w.weakCount||0)-1);
   }else{
-    markWeak(w,val?'听写错误':blankReason);
+    markWeak(w,val?'默写错误':blankReason);
   }
   if(input) input.dataset.graded='1';
   save();
   dictChecked=true;
-  dictShowAnswer(!!ok,ok?'正确':(val?'听写错误':blankReason));
+  dictShowAnswer(!!ok,ok?'正确':(val?'默写错误':blankReason));
 }
 function dictShowAnswer(ok,reason){
   const l=getActive();if(!l)return;
@@ -1172,11 +1313,13 @@ function dictShowAnswer(ok,reason){
   const input=document.getElementById('dict-input');
   const fb=document.getElementById('dict-feedback');
   if(input){
-    input.value=w.en;
+    input.value=compactAnswer(w.en);
     input.readOnly=true;
     input.dataset.answerShown='1';
-    input.classList.toggle('correct',!!ok);
-    input.classList.toggle('wrong',!ok);
+  }
+  const slots=document.getElementById('dict-slots');
+  if(slots){
+    slots.innerHTML=String(w.en||'').split('').map(ch=>/\s/.test(ch)?'<span class="spell-slot space"></span>':`<span class="spell-slot ${ok?'correct':'wrong'}">${escHtml(ch)}</span>`).join('');
   }
   if(fb){
     fb.className='feedback '+(ok?'ok':'bad');
@@ -1208,15 +1351,12 @@ function dictStopAuto(){
 }
 function dictAutoSchedule(){
   clearTimeout(dictAutoTimer);
-  const btn=document.getElementById('dict-speak-btn');
-  if(btn){btn.classList.add('speaking');btn.textContent='🔊 播放中...';}
   const l=getActive();if(!l)return;
   speakEN(l.words[dictIdx].en,()=>{
-    if(btn){btn.classList.remove('speaking');btn.textContent='🔊 播放英文';}
     if(!dictAuto)return;
     dictAutoTimer=setTimeout(()=>{
       if(!dictAuto)return;
-      dictGradeBeforeLeave('听写超时未填写');
+      dictGradeBeforeLeave('默写超时未填写');
       dictAdvanceTimer=setTimeout(dictAdvanceNow,1300);
     },dictInterval);
   });
@@ -1674,12 +1814,12 @@ function renderWeak(){
   const c=document.getElementById('weak-content');
   const entries=getWeakEntries();
   if(!entries.length){
-    c.innerHTML='<div class="empty-state"><div class="emoji">🧠</div><p>薄弱词仓现在是空的。<br>听说标记、听写错误、极速配错配的单词会自动来到这里。</p></div>';
+    c.innerHTML='<div class="empty-state"><div class="emoji">🧠</div><p>薄弱词仓现在是空的。<br>听说标记、默写错误、极速配错配的单词会自动来到这里。</p></div>';
     return;
   }
   const groups=[
     {key:'listen',title:'听说错误'},
-    {key:'dictation',title:'听写错误'},
+    {key:'dictation',title:'默写错误'},
     {key:'game',title:'极速配错误'}
   ];
   c.innerHTML=`<div class="mini-grid">
@@ -1925,7 +2065,7 @@ function renderReport(){
   const weakCount=getWeakEntries().length;
   c.innerHTML=`<div class="mini-grid">
     <div class="metric-card"><div class="metric-num">${Object.keys(studyStats.words||{}).length}</div><div class="metric-label">今日学习词数</div></div>
-    <div class="metric-card"><div class="metric-num">${dictRate}%</div><div class="metric-label">听写正确率</div></div>
+    <div class="metric-card"><div class="metric-num">${dictRate}%</div><div class="metric-label">默写正确率</div></div>
     <div class="metric-card"><div class="metric-num">${readRate}%</div><div class="metric-label">跟读掌握率</div></div>
     <div class="metric-card"><div class="metric-num">${studyStats.streak||0}</div><div class="metric-label">连续打卡天数</div></div>
     <div class="metric-card"><div class="metric-num">${weakCount}</div><div class="metric-label">薄弱词待复盘</div></div>
@@ -2008,7 +2148,7 @@ function importArchive(file){
 
 // ─── PANEL SWITCH ───
 function showPanel(id) {
-  ['manage','browse','readword','listen','dictation','game','weak','sentence','story','report'].forEach(p=>{
+  ['manage','browse','readword','listen','spell','dictation','game','weak','sentence','story','report'].forEach(p=>{
     const panel=document.getElementById('panel-'+p);
     const tab=document.getElementById('tab-'+p);
     if(panel) panel.classList.toggle('active',p===id);
@@ -2022,6 +2162,7 @@ function showPanel(id) {
   if(id==='readword') renderReadWord();
   listenStopAuto();dictStopAuto();
   if(id==='listen') renderListen();
+  if(id==='spell') renderSpell();
   if(id==='dictation') renderDictation();
   if(id==='game') renderGame();
   if(id==='weak') renderWeak();
