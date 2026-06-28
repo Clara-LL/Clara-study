@@ -235,6 +235,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hira
 .tab-inner button.active{background:var(--green);color:#fff;border-color:var(--green)}
 .save-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;padding:10px 20px;border-radius:30px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:999}
 .save-toast.show{opacity:1}
+.access-overlay{position:fixed;inset:0;background:rgba(250,249,246,.96);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px}
+.access-card{width:min(420px,100%);background:#fff;border:1.5px solid var(--border);border-radius:18px;padding:24px;box-shadow:0 18px 60px rgba(0,0,0,.14)}
+.access-title{font-size:22px;font-weight:900;margin-bottom:8px;color:var(--text)}
+.access-sub{font-size:13px;color:var(--text-3);line-height:1.7;margin-bottom:16px}
+.access-card input{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:13px 14px;font-size:18px;font-weight:800;letter-spacing:.04em;text-align:center;text-transform:uppercase;outline:none}
+.access-card input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.access-error{font-size:13px;color:var(--red);min-height:20px;margin-top:8px}
+.locked-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:28px 22px;text-align:center;box-shadow:var(--shadow)}
+.locked-card .lock-icon{font-size:38px;margin-bottom:10px}
+.locked-card h3{font-size:20px;margin-bottom:8px}
+.locked-card p{font-size:14px;color:var(--text-3);line-height:1.7;margin-bottom:14px}
+.nav-tab.locked::after{content:' 🔒';font-size:11px;color:var(--text-3)}
 @media(max-width:520px){
   .top-nav{height:auto;min-height:56px;flex-wrap:wrap;gap:8px;padding:8px 12px}
   .brand{max-width:calc(100% - 82px);overflow:hidden;text-overflow:ellipsis}
@@ -421,6 +433,17 @@ exercise  /ˈeksəsaɪz/  n./v. 锻炼</pre>
 </div>
 
 <div class="save-toast" id="toast">✅ 已保存</div>
+<div class="access-overlay" id="access-overlay" style="display:none">
+  <div class="access-card">
+    <div class="access-title">Clara词研堂 学员访问</div>
+    <div class="access-sub">请输入老师提供的访问码。未开通的功能会显示锁定状态，可联系老师开通。</div>
+    <input id="access-code-input" placeholder="输入访问码" autocomplete="one-time-code">
+    <div class="access-error" id="access-error"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
+      <button class="btn btn-primary" onclick="submitAccessCode()">进入学习</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ─── DATA ───
@@ -440,6 +463,20 @@ const CLARA_SITE_AI = {
   model: 'qwen-turbo',
   hideSettingsForStudents: true   // 设为 true：学生看不到 AI 设置和 Key
 };
+// ─── 访问码配置区（前端实用版，可防普通用户，不是真正后端加密）───
+// features 可填：browse, spell, dictation, game, story
+const CLARA_ACCESS_CODES = {
+  'CLARA2026': {name:'正式学员', expires:'2027-12-31', maxUses:9999, features:['browse','spell','dictation','game','story']},
+  'DEMO2026': {name:'体验学员', expires:'2027-12-31', maxUses:3, features:[]}
+};
+const LOCKED_FEATURES = {
+  browse:'卡片浏览',
+  spell:'音拼练习',
+  dictation:'默写练习',
+  game:'极速配',
+  story:'Clara 小语篇'
+};
+let currentAccess = null;
 let lessons = [];
 let activeLessonId = null;
 let playingIdx = -1;
@@ -496,6 +533,64 @@ function uid() { return Date.now().toString(36)+Math.random().toString(36).slice
 function showToast() {
   const t = document.getElementById('toast'); t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 1800);
+}
+function teacherMode(){return new URLSearchParams(location.search).get('teacher')==='1';}
+function loadAccess(){
+  if(teacherMode()){currentAccess={code:'TEACHER',name:'老师模式',features:Object.keys(LOCKED_FEATURES),teacher:true};return;}
+  try{currentAccess=JSON.parse(localStorage.getItem('clara_access')||'null');}catch(e){currentAccess=null;}
+  if(currentAccess&&!accessStillValid(currentAccess)){currentAccess=null;localStorage.removeItem('clara_access');}
+}
+function accessStillValid(access){
+  if(!access)return false;
+  if(access.teacher)return true;
+  const cfg=CLARA_ACCESS_CODES[access.code];
+  if(!cfg)return false;
+  if(cfg.expires&&new Date(cfg.expires+'T23:59:59')<new Date())return false;
+  return true;
+}
+function initAccessGate(){
+  loadAccess();
+  const overlay=document.getElementById('access-overlay');
+  if(!currentAccess&&overlay){overlay.style.display='flex';}
+  updateFeatureLocks();
+  const input=document.getElementById('access-code-input');
+  input?.addEventListener('keydown',e=>{if(e.key==='Enter')submitAccessCode();});
+}
+function submitAccessCode(){
+  const input=document.getElementById('access-code-input');
+  const err=document.getElementById('access-error');
+  const code=(input?.value||'').trim().toUpperCase();
+  const cfg=CLARA_ACCESS_CODES[code];
+  if(!cfg){if(err)err.textContent='访问码不正确，请联系老师确认。';return;}
+  if(cfg.expires&&new Date(cfg.expires+'T23:59:59')<new Date()){if(err)err.textContent='访问码已到期，请联系老师续费。';return;}
+  const useKey='clara_access_uses_'+code;
+  const used=parseInt(localStorage.getItem(useKey)||'0',10);
+  if(cfg.maxUses&&used>=cfg.maxUses){if(err)err.textContent='这个访问码在本设备上的可用次数已用完。';return;}
+  localStorage.setItem(useKey,String(used+1));
+  currentAccess={code,name:cfg.name||'学员',features:cfg.features||[],expires:cfg.expires||'',activatedAt:new Date().toISOString()};
+  localStorage.setItem('clara_access',JSON.stringify(currentAccess));
+  document.getElementById('access-overlay').style.display='none';
+  updateFeatureLocks();
+  showPanel('manage');
+}
+function featureUnlocked(feature){
+  if(teacherMode())return true;
+  if(!LOCKED_FEATURES[feature])return true;
+  return !!(currentAccess&&Array.isArray(currentAccess.features)&&currentAccess.features.includes(feature));
+}
+function lockedHtml(feature){
+  return `<div class="locked-card">
+    <div class="lock-icon">🔒</div>
+    <h3>${escHtml(LOCKED_FEATURES[feature]||'该功能')}暂未开通</h3>
+    <p>该功能已为学员准备好。开通后即可使用，请联系 Clara 老师升级权限。</p>
+    <button class="btn btn-outline" onclick="showPanel('manage')">先返回录入单词</button>
+  </div>`;
+}
+function updateFeatureLocks(){
+  Object.keys(LOCKED_FEATURES).forEach(f=>{
+    const tab=document.getElementById('tab-'+f);
+    if(tab)tab.classList.toggle('locked',!featureUnlocked(f));
+  });
 }
 function todayStr(){return new Date().toISOString().slice(0,10);}
 function freshStats(){return{today:todayStr(),words:{},dictRight:0,dictWrong:0,readGood:0,readWeak:0,streak:0,lastStudyDate:''};}
@@ -1464,13 +1559,15 @@ function renderSentence(){
 function renderSentenceGenerator(){
   const cfg=getAiConfig();
   const showSettings=!hasSiteAi()||!CLARA_SITE_AI.hideSettingsForStudents||new URLSearchParams(location.search).get('teacher')==='1';
+  const l=getActive();
+  const used=!!(l&&l.sentenceGenerated&&!teacherMode());
   return `<div class="generator-box">
     <div class="generator-head">
       <h3>✨ 自动生成相关句子</h3>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-      <button class="btn btn-primary btn-sm" onclick="generateSentences('missing')">✨ 为缺失单词生成例句</button>
-      <button class="btn btn-outline btn-sm" onclick="generateSentences('all')">🔄 全部重新生成</button>
+      <button class="btn btn-primary btn-sm" onclick="generateSentences('missing')" ${used?'disabled':''}>✨ 为缺失单词生成例句</button>
+      <button class="btn btn-outline btn-sm" onclick="generateSentences('all')" ${used?'disabled':''}>🔄 全部重新生成</button>
     </div>
     ${showSettings?`<details class="generator-settings">
       <summary>AI 设置</summary>
@@ -1495,7 +1592,7 @@ function renderSentenceGenerator(){
         <button class="btn btn-outline btn-sm" onclick="testAiConnection()">🔌 测试连接</button>
       </div>
     </details>`:''}
-    <div class="generator-status" id="generator-status">${cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}${hasSiteAi()?'（站点内置）':''}`:'当前未配置 API Key，将使用本地例句库。点击 AI 设置 → 选择免费的智谱AI或Groq，填入Key即可。'}</div>
+    <div class="generator-status" id="generator-status">${used?'本课时已经生成过一次例句。为节省 AI 次数，本课不再重复生成。':(cfg.key?`当前将调用 ${aiProviderName(cfg.provider)}：${escHtml(cfg.model)}${hasSiteAi()?'（站点内置）':''}`:'当前未配置 API Key，将使用本地例句库。点击 AI 设置 → 选择免费的智谱AI或Groq，填入Key即可。')}</div>
   </div>`;
 }
 function hasSiteAi(){
@@ -1583,6 +1680,7 @@ function setGenStatus(text,isBad){
 }
 async function generateSentences(mode){
   const l=getActive();if(!l)return;
+  if(l.sentenceGenerated&&!teacherMode()){setGenStatus('本课时已经生成过一次例句。为节省 AI 次数，本课不再重复生成。',true);return;}
   const cfg=readAiConfig();
   const targets=(l.words||[]).filter(w=>w.en&&(mode==='all'||!w.sentence));
   if(!targets.length){setGenStatus('当前没有需要生成的单词。');return;}
@@ -1590,6 +1688,7 @@ async function generateSentences(mode){
   try{
     const generated=cfg.key?await generateWithAi(targets,cfg):generateWithTemplates(targets,cfg.level);
     applyGeneratedSentences(l,generated,mode);
+    l.sentenceGenerated=true;
     save();
     renderEditor();
     renderSentence();
@@ -1598,6 +1697,7 @@ async function generateSentences(mode){
     console.error(e);
     const generated=generateWithTemplates(targets,cfg.level);
     applyGeneratedSentences(l,generated,mode);
+    l.sentenceGenerated=true;
     save();
     renderEditor();
     renderSentence();
@@ -2252,10 +2352,16 @@ function showPanel(id) {
     if(panel) panel.classList.toggle('active',p===id);
     if(tab) tab.classList.toggle('active',p===id);
   });
+  updateFeatureLocks();
   rwStop(); srStop();
   clearInterval(gameTimer);
   if(window.speechSynthesis)window.speechSynthesis.cancel();
   playingIdx=-1;
+  if(LOCKED_FEATURES[id]&&!featureUnlocked(id)){
+    const c=document.getElementById(id==='browse'?'browse-content':id==='spell'?'spell-content':id==='dictation'?'dictation-content':id==='game'?'game-content':id==='story'?'story-content':'');
+    if(c)c.innerHTML=lockedHtml(id);
+    return;
+  }
   if(id==='browse') renderBrowse();
   if(id==='readword') renderReadWord();
   listenStopAuto();dictStopAuto();
@@ -2285,6 +2391,7 @@ load();
 renderLessons();
 renderEditor();
 updateBadge();
+initAccessGate();
 document.getElementById('new-lesson-name').addEventListener('keydown',e=>{if(e.key==='Enter')addLesson();});
 </script>
 </body>
